@@ -26,7 +26,7 @@ Write-Host "`n[2/4] コネクターをダウンロードしています…" -For
 $dir = Join-Path $env:USERPROFILE 'komu-todo-mcp'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $base = 'https://raw.githubusercontent.com/ak05080707/rakugaki-app/claude/practical-bohr-07lnjy/todo/mcp-server'
-foreach ($f in 'index.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {
+foreach ($f in 'index.mjs', 'configure.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {
   Invoke-WebRequest -UseBasicParsing -Uri "$base/$f" -OutFile (Join-Path $dir $f)
 }
 Push-Location $dir
@@ -35,36 +35,15 @@ if ($LASTEXITCODE -ne 0) { throw 'npm install に失敗しました' }
 Write-Host "  OK: $dir"
 
 Write-Host "`n[3/4] Claude Desktop の設定に追加しています…" -ForegroundColor Cyan
-# 通常版は %APPDATA%\Claude、Microsoft Store 版は Packages 内を読むことがあるので両方に書く
-$cfgDirs = @(Join-Path $env:APPDATA 'Claude')
-$store = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Packages') -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($store) { $cfgDirs += Join-Path $store.FullName 'LocalCache\Roaming\Claude' }
-$entry = [pscustomobject]@{
-  command = $node
-  args    = @((Join-Path $dir 'index.mjs'))
-  env     = [pscustomobject]@{ TODO_API_URL = $url; TODO_API_KEY = $key }
-}
-foreach ($cfgDir in $cfgDirs) {
-  New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
-  $cfgPath = Join-Path $cfgDir 'claude_desktop_config.json'
-  $cfg = [pscustomobject]@{}
-  if (Test-Path $cfgPath) {
-    Copy-Item $cfgPath "$cfgPath.bak" -Force
-    $raw = [IO.File]::ReadAllText($cfgPath)
-    if ($raw.Trim()) { $cfg = $raw | ConvertFrom-Json }
-  }
-  if (-not $cfg.PSObject.Properties['mcpServers']) { $cfg | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) }
-  if ($cfg.mcpServers.PSObject.Properties['komu-todo']) { $cfg.mcpServers.'komu-todo' = $entry }
-  else { $cfg.mcpServers | Add-Member -NotePropertyName 'komu-todo' -NotePropertyValue $entry }
-  [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
-  Write-Host "  OK: $cfgPath"
-}
-
-Write-Host "`n[4/4] TODO につながるか確認しています…" -ForegroundColor Cyan
-# Claude と同じ仕組み（Node.js）で実際に TODO を読んでみる
+# JSON の書き込みは Node.js で行う（Windows PowerShell 5.1 の ConvertTo-Json は配列を崩すことがあるため）
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
 $env:TODO_API_URL = $url
 $env:TODO_API_KEY = $key
+& $node (Join-Path $dir 'configure.mjs') | Out-Host
+if ($LASTEXITCODE -ne 0) { throw 'Claude Desktop の設定に失敗しました' }
+
+Write-Host "`n[4/4] TODO につながるか確認しています…" -ForegroundColor Cyan
+# Claude と同じ仕組み（Node.js）で実際に TODO を読んでみる
 $env:KOMU_MCP_INDEX = 'file:///' + ((Join-Path $dir 'index.mjs') -replace '\\', '/')
 $js = "import(process.env.KOMU_MCP_INDEX).then(m => m.gas('list')).then(r => console.log('OK ' + r.length), e => console.log('NG ' + e.message))"
 $out = (& $node -e $js | Out-String).Trim()
