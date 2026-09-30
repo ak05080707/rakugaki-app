@@ -35,26 +35,30 @@ if ($LASTEXITCODE -ne 0) { throw 'npm install に失敗しました' }
 Write-Host "  OK: $dir"
 
 Write-Host "`n[3/4] Claude Desktop の設定に追加しています…" -ForegroundColor Cyan
+# 通常版は %APPDATA%\Claude、Microsoft Store 版は Packages 内を読むことがあるので両方に書く
+$cfgDirs = @(Join-Path $env:APPDATA 'Claude')
 $store = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Packages') -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue | Select-Object -First 1
-$cfgDir = if ($store) { Join-Path $store.FullName 'LocalCache\Roaming\Claude' } else { Join-Path $env:APPDATA 'Claude' }
-New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
-$cfgPath = Join-Path $cfgDir 'claude_desktop_config.json'
-$cfg = [pscustomobject]@{}
-if (Test-Path $cfgPath) {
-  Copy-Item $cfgPath "$cfgPath.bak" -Force
-  $raw = [IO.File]::ReadAllText($cfgPath)
-  if ($raw.Trim()) { $cfg = $raw | ConvertFrom-Json }
-}
-if (-not $cfg.PSObject.Properties['mcpServers']) { $cfg | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) }
+if ($store) { $cfgDirs += Join-Path $store.FullName 'LocalCache\Roaming\Claude' }
 $entry = [pscustomobject]@{
   command = $node
   args    = @((Join-Path $dir 'index.mjs'))
   env     = [pscustomobject]@{ TODO_API_URL = $url; TODO_API_KEY = $key }
 }
-if ($cfg.mcpServers.PSObject.Properties['komu-todo']) { $cfg.mcpServers.'komu-todo' = $entry }
-else { $cfg.mcpServers | Add-Member -NotePropertyName 'komu-todo' -NotePropertyValue $entry }
-[IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
-Write-Host "  OK: $cfgPath"
+foreach ($cfgDir in $cfgDirs) {
+  New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
+  $cfgPath = Join-Path $cfgDir 'claude_desktop_config.json'
+  $cfg = [pscustomobject]@{}
+  if (Test-Path $cfgPath) {
+    Copy-Item $cfgPath "$cfgPath.bak" -Force
+    $raw = [IO.File]::ReadAllText($cfgPath)
+    if ($raw.Trim()) { $cfg = $raw | ConvertFrom-Json }
+  }
+  if (-not $cfg.PSObject.Properties['mcpServers']) { $cfg | Add-Member -NotePropertyName mcpServers -NotePropertyValue ([pscustomobject]@{}) }
+  if ($cfg.mcpServers.PSObject.Properties['komu-todo']) { $cfg.mcpServers.'komu-todo' = $entry }
+  else { $cfg.mcpServers | Add-Member -NotePropertyName 'komu-todo' -NotePropertyValue $entry }
+  [IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding($false)))
+  Write-Host "  OK: $cfgPath"
+}
 
 Write-Host "`n[4/4] TODO につながるか確認しています…" -ForegroundColor Cyan
 # Claude と同じ仕組み（Node.js）で実際に TODO を読んでみる
