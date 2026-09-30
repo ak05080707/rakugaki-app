@@ -82,6 +82,11 @@
 Outlook 2019 は Microsoft 365 と違ってクラウドAPIがないため、**PC上のOutlookを直接操作する方式（COM）** にしています。
 Outlook 2019 が入っている Windows PC の Claude Desktop で使います。
 
+**かんたん版**：`mcp-server/install.ps1` の中身を PowerShell に貼り付けて Enter（URLと合言葉を聞かれます）。
+Node.js のインストール・ダウンロード・Claude Desktop の設定・接続確認まで自動で行います。終わったら Claude Desktop を再起動。
+
+**手動でやる場合**
+
 1. [Node.js](https://nodejs.org/ja)（LTS版）をインストール
 2. このリポジトリの `todo/mcp-server` フォルダを PC に置く（例：`C:\tools\komu-todo-mcp`）
 3. そのフォルダで PowerShell を開き `npm install`
