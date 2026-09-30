@@ -57,10 +57,21 @@ else { $cfg.mcpServers | Add-Member -NotePropertyName 'komu-todo' -NotePropertyV
 Write-Host "  OK: $cfgPath"
 
 Write-Host "`n[4/4] TODO につながるか確認しています…" -ForegroundColor Cyan
-$body = @{ key = $key; action = 'list' } | ConvertTo-Json -Compress
-$res = Invoke-RestMethod -Uri $url -Method Post -ContentType 'text/plain; charset=utf-8' -Body $body
-if (-not $res.ok) { throw "TODO に接続できません: $($res.error)（合言葉を確認）" }
-Write-Host "  OK: TODO $(@($res.result).Count) 件を読み込めました"
+# Claude と同じ仕組み（Node.js）で実際に TODO を読んでみる
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$env:TODO_API_URL = $url
+$env:TODO_API_KEY = $key
+$env:KOMU_MCP_INDEX = 'file:///' + ((Join-Path $dir 'index.mjs') -replace '\\', '/')
+$js = "import(process.env.KOMU_MCP_INDEX).then(m => m.gas('list')).then(r => console.log('OK ' + r.length), e => console.log('NG ' + e.message))"
+$out = (& $node -e $js | Out-String).Trim()
+if ($out -like 'OK *') {
+  Write-Host "  OK: TODO $($out.Substring(3)) 件を読み込めました"
+} else {
+  Write-Host "  TODO への接続確認がうまくいきませんでした。設定は書き込み済みです。" -ForegroundColor Yellow
+  Write-Host "  下の内容をスクショして Claude に見せてください：" -ForegroundColor Yellow
+  Write-Host "  URL: $url"
+  Write-Host "  $out"
+}
 
 Write-Host "`n完了しました。Claude Desktop を一度終了して、起動し直してください。" -ForegroundColor Green
 Write-Host '（右下のタスクトレイの Claude アイコンを右クリック →「終了」→ もう一度起動）'

@@ -36,7 +36,7 @@ export async function gas(action, params = {}) {
   const text = await res.text();
   let data;
   try { data = JSON.parse(text); } catch {
-    throw new Error('Apps Script の応答が読めません（URL・デプロイ設定を確認）: ' + text.slice(0, 200));
+    throw new Error(`Apps Script の応答が読めません（HTTP ${res.status}・URL・デプロイ設定を確認）: ` + text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300));
   }
   if (!data.ok) throw new Error(data.error || 'Apps Script エラー');
   return data.result;
