@@ -3,8 +3,8 @@
  * Claude Desktop の設定（claude_desktop_config.json）に komu-todo を登録する。
  * 通常版（%APPDATA%\Claude）と Microsoft Store 版（%LOCALAPPDATA%\Packages\Claude_*）の両方に書く。
  *
- * 環境変数 TODO_API_URL / TODO_API_KEY があればそれを使い、
- * なければ既存の設定（またはそのバックアップ）から komu-todo の値を拾って書き直す。
+ * 環境変数 TODO_API_URL / TODO_API_KEY / TIMETREE_EMAIL / TIMETREE_PASSWORD があればそれを使い、
+ * なければ既存の設定（またはそのバックアップ）から komu-todo の値を引き継いで書き直す。
  * Windows PowerShell 5.1 の ConvertTo-Json で崩れた設定（args が {"value":[…]} になる等）の修復も兼ねる。
  */
 import fs from 'node:fs';
@@ -32,22 +32,26 @@ function read(file) {
 }
 const unwrap = v => Array.isArray(v) ? v : (v && Array.isArray(v.value) ? v.value : v == null ? [] : [v]);
 
-let url = process.env.TODO_API_URL, key = process.env.TODO_API_KEY;
-if (!url || !key) {
-  for (const f of targets.flatMap(t => [t, t + '.bak'])) {
-    const env = read(f)?.mcpServers?.['komu-todo']?.env;
-    if (env?.TODO_API_URL && env?.TODO_API_KEY) { url = env.TODO_API_URL; key = env.TODO_API_KEY; break; }
-  }
+// 既存の komu-todo の設定（環境変数）を拾う
+let prevEnv = {};
+for (const f of targets.flatMap(t => [t, t + '.bak2', t + '.bak'])) {
+  const env = read(f)?.mcpServers?.['komu-todo']?.env;
+  if (env?.TODO_API_URL && env?.TODO_API_KEY) { prevEnv = env; break; }
 }
+const url = process.env.TODO_API_URL || prevEnv.TODO_API_URL;
+const key = process.env.TODO_API_KEY || prevEnv.TODO_API_KEY;
 if (!url || !key) {
   console.log('NG: URL と合言葉が見つかりません。手順ページのインストール用コマンドを実行し直してください。');
   process.exit(1);
 }
+// 指定された値で上書き、それ以外（TimeTree のログイン情報など）は前の設定を引き継ぐ
+const env = { ...prevEnv, TODO_API_URL: url, TODO_API_KEY: key };
+for (const k of ['TIMETREE_EMAIL', 'TIMETREE_PASSWORD']) if (process.env[k]) env[k] = process.env[k];
 
 const entry = {
   command: process.execPath,
   args: [path.join(here, 'index.mjs')],
-  env: { TODO_API_URL: url, TODO_API_KEY: key }
+  env
 };
 
 for (const file of targets) {
@@ -65,3 +69,4 @@ for (const file of targets) {
   console.log(`      登録済みのサーバー: ${Object.keys(cfg.mcpServers).join(', ')}`);
 }
 console.log(`  command: ${entry.command}\n  args:    ${entry.args[0]}\n  URL:     ${url}`);
+console.log(`  TimeTree: ${env.TIMETREE_EMAIL ? env.TIMETREE_EMAIL + ' で設定済み' : '未設定'}`);

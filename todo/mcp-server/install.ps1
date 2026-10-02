@@ -26,7 +26,7 @@ Write-Host "`n[2/4] コネクターをダウンロードしています…" -For
 $dir = Join-Path $env:USERPROFILE 'komu-todo-mcp'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $base = 'https://raw.githubusercontent.com/ak05080707/rakugaki-app/claude/practical-bohr-07lnjy/todo/mcp-server'
-foreach ($f in 'index.mjs', 'configure.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {
+foreach ($f in 'index.mjs', 'timetree.mjs', 'configure.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {
   Invoke-WebRequest -UseBasicParsing -Uri "$base/$f" -OutFile (Join-Path $dir $f)
 }
 Push-Location $dir

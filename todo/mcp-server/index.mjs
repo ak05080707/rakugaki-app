@@ -7,10 +7,12 @@
  *   ・LINE から届いたメッセージの確認
  *   ・Outlook 2019 の受信メール・フラグ付きメール・予定表・タスクの読み取り
  *   ・不要メールを「削除済みアイテム」へ移動（元に戻せる）
+ *   ・TimeTree の予定の読み取り（timetree.mjs）
  *
  * 環境変数
  *   TODO_API_URL … Apps Script ウェブアプリの URL（…/exec）
  *   TODO_API_KEY … 合言葉（setup() 実行時にログに出る API_KEY）
+ *   TIMETREE_EMAIL / TIMETREE_PASSWORD … TimeTree のログイン情報（任意）
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -18,6 +20,7 @@ import { z } from 'zod';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { getEvents as timetreeEvents, listCalendars as timetreeCalendars } from './timetree.mjs';
 
 const API_URL = process.env.TODO_API_URL;
 const API_KEY = process.env.TODO_API_KEY;
@@ -131,6 +134,24 @@ export function createServer() {
     description: 'TODO用LINE公式アカウントに届いたメッセージの履歴（新しい順）。LINEから送った内容は自動でTODOにも登録済み。',
     inputSchema: { limit: z.number().int().min(1).max(200).optional() }
   }, safe(({ limit }) => gas('lineLog', { limit: limit || 30 })));
+
+  // ── TimeTree（読み取りのみ・非公式） ──
+  server.registerTool('timetree_calendars', {
+    title: 'TimeTree カレンダー一覧',
+    description: 'TimeTree のカレンダー（共有カレンダー含む）の名前一覧を取得する。',
+    inputSchema: {}
+  }, safe(() => timetreeCalendars()));
+
+  server.registerTool('timetree_events', {
+    title: 'TimeTree 予定',
+    description: 'TimeTree の予定を取得する（繰り返し予定も日ごとに展開）。時刻は日本時間。読み取り専用で、予定の追加・変更はできない。',
+    inputSchema: {
+      from: z.string().optional().describe('開始日 YYYY-MM-DD（既定：今日）'),
+      days: z.number().int().min(1).max(366).optional().describe('何日分（既定7）'),
+      calendar: z.string().optional().describe('カレンダー名の一部（省略で全カレンダー）'),
+      query: z.string().optional().describe('タイトル・メモ・場所に含む文字で絞り込み')
+    }
+  }, safe(a => timetreeEvents(a)));
 
   // ── Outlook 2019 ──
   server.registerTool('outlook_recent_mails', {

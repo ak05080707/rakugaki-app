@@ -114,6 +114,7 @@ Node.js のインストール・ダウンロード・Claude Desktop の設定・
 |---|---|
 | `todo_list` / `todo_add` / `todo_add_many` / `todo_complete` / `todo_update` / `todo_delete` | TODOの操作 |
 | `line_messages` | LINEに送ったメッセージの履歴 |
+| `timetree_calendars` / `timetree_events` | TimeTree の予定（読み取りのみ・繰り返し予定も展開） |
 | `outlook_recent_mails` | 受信トレイの直近メール（未読のみも可） |
 | `outlook_flagged_mails` | フラグ付き（要対応）メール |
 | `outlook_search_mails` | キーワードでメール検索 |
@@ -128,6 +129,16 @@ Node.js のインストール・ダウンロード・Claude Desktop の設定・
 - 「Plaudの今日の会議から、私の担当分をTODOに追加して」（Plaudコネクターと組み合わせ）
 - 「今日のTODOとOutlookの予定をまとめて、朝の段取りを出して」
 - 「1週間分の広告メールを一覧にして。〇〇ショップは除外。OKなら削除済みへ」
+
+### TimeTree（任意）
+TimeTree の公式APIは終了しているため、Web版（timetreeapp.com）と同じ内部APIでログインして**読み取りのみ**行います（`mcp-server/timetree.mjs`）。
+TimeTree 側の仕様変更で動かなくなる可能性があります。
+
+1. TimeTree にメールアドレス＋パスワードでログインできる状態にする（LINE/Apple/Google ログインの場合はアプリでメールアドレスを登録）
+2. Claude を終了 → `mcp-server/setup-timetree.ps1` の中身を PowerShell に貼り付けて Enter（メールアドレスとパスワードを聞かれます）
+3. Claude を起動して「TimeTreeの今週の予定を見せて」
+
+ログイン情報はこのPCの `claude_desktop_config.json`（`TIMETREE_EMAIL` / `TIMETREE_PASSWORD`）にだけ保存されます。
 
 ### うまく動かない時
 - **「プログラムがOutlookにアクセスしようとしています」と出る** … ウイルス対策ソフトが古いと出ます。「許可」でOK。毎回出る場合は Outlook の「ファイル→オプション→セキュリティセンター→プログラムによるアクセス」を確認
