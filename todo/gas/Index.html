@@ -110,9 +110,34 @@ li.is-done .check svg { opacity: 1; transform: scale(1); }
 .btn.ghost { background: var(--line); color: var(--text); }
 .btn.del { background: transparent; color: var(--danger); margin-right: auto; }
 
+/* 選択モード */
+.head-btns { display: flex; gap: 4px; align-items: center; }
+.sel-toggle { border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 13px; padding: 5px 12px; border-radius: 99px; cursor: pointer; }
+.sel-toggle.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+body.selecting .check { border-radius: 7px; }
+body.selecting li.is-done .check { background: transparent; border-color: var(--muted); }
+body.selecting li.is-done .check svg { opacity: 0; }
+body.selecting li { cursor: pointer; }
+body.selecting li.sel { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+body.selecting li.sel .check { background: var(--accent); border-color: var(--accent); }
+body.selecting li.sel .check svg { opacity: 1; transform: scale(1); }
+body.selecting .add, body.selecting .tabs { opacity: .45; pointer-events: none; }
+.selbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--card); border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.08); padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); display: none; }
+body.selecting .selbar { display: block; }
+.selbar .in { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.selbar .row1 { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.selbar .count { font-weight: 700; margin-right: auto; }
+.selbar .row2 { display: flex; gap: 8px; }
+.selbar .row2 .btn { flex: 1; padding: 11px 4px; white-space: nowrap; font-size: 14px; }
+.btn.danger { background: var(--danger); }
+.btn.danger.confirm { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 35%, transparent); }
+.btn:disabled { opacity: .4; cursor: default; }
+
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(80px); background: var(--text); color: var(--bg);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; transition: transform .25s; z-index: 20; display: flex; gap: 12px; align-items: center; white-space: nowrap; }
 .toast.show { transform: translateX(-50%) translateY(0); }
+body.selecting .toast.show { transform: translateX(-50%) translateY(-110px); }
 .toast button { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }
 </style>
 </head>
@@ -123,7 +148,10 @@ li.is-done .check svg { opacity: 1; transform: scale(1); }
       <div class="date" id="today"></div>
       <h1>今日のTODO</h1>
     </div>
-    <button class="sync" id="sync" title="最新に更新">⟳ <span id="syncAt">読込中…</span></button>
+    <div class="head-btns">
+      <button class="sync" id="sync" title="最新に更新">⟳ <span id="syncAt">読込中…</span></button>
+      <button class="sel-toggle" id="selToggle">選択</button>
+    </div>
   </header>
 
   <div class="progress">
@@ -169,6 +197,22 @@ li.is-done .check svg { opacity: 1; transform: scale(1); }
   </form>
 </div>
 
+<div class="selbar" id="selBar">
+  <div class="in">
+    <div class="row1">
+      <span class="count" id="selCount">0件を選択</span>
+      <button type="button" class="chip" id="selAll">表示中をすべて</button>
+      <button type="button" class="chip" id="selDone">完了済みをすべて</button>
+      <button type="button" class="chip" id="selNone">選択を解除</button>
+    </div>
+    <div class="row2">
+      <button type="button" class="btn ghost" id="selCancel">やめる</button>
+      <button type="button" class="btn" id="selComplete">✓ 完了にする</button>
+      <button type="button" class="btn danger" id="selDelete">🗑 削除</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"><span id="toastMsg"></span><button id="toastUndo" hidden>元に戻す</button></div>
 
 <script>
@@ -179,6 +223,8 @@ let showDone = true;
 let addDue = 'today';
 let addHi = false;
 let editing = null;
+let selecting = false;
+const selected = new Set();
 
 // ── サーバー呼び出し（GAS上なら google.script.run、ローカル確認用にモックあり） ──
 function call(fn, ...args) {
@@ -196,7 +242,9 @@ const mock = (() => {
     async uiList() { return load(); },
     async uiAdd(p) { const a = load(); const o = { id: Math.random().toString(16).slice(2, 10), memo: '', priority: '中', source: '手入力', ref: '', done: false, doneAt: '', createdAt: now(), updatedAt: now(), ...p }; a.push(o); save(a); return o; },
     async uiUpdate(id, f) { const a = load(); const t = a.find(x => x.id === id); if ('done' in f) t.doneAt = f.done ? now() : ''; Object.assign(t, f, { updatedAt: now() }); save(a); return t; },
-    async uiDelete(id) { save(load().filter(x => x.id !== id)); return { deleted: id }; }
+    async uiDelete(id) { save(load().filter(x => x.id !== id)); return { deleted: id }; },
+    async uiDeleteMany(ids) { const a = load(); save(a.filter(x => !ids.includes(x.id))); return { deleted: a.length - load().length }; },
+    async uiSetDoneMany(ids, done) { const a = load(); const ch = []; a.forEach(t => { if (ids.includes(t.id) && t.done !== done) { t.done = done; t.doneAt = done ? now() : ''; ch.push(t); } }); save(a); return ch; }
   };
 })();
 
@@ -229,7 +277,7 @@ function srcBadge(s) {
 function item(t) {
   const today = todayStr();
   const dueCls = !t.done && t.due && t.due < today ? 'over' : t.due === today ? 'today' : '';
-  return '<li class="p-' + esc(t.priority) + (t.done ? ' is-done' : '') + '" data-id="' + esc(t.id) + '">' +
+  return '<li class="p-' + esc(t.priority) + (t.done ? ' is-done' : '') + (selected.has(t.id) ? ' sel' : '') + '" data-id="' + esc(t.id) + '">' +
     '<button class="check" aria-label="完了"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>' +
     '<div class="body"><div class="title">' + esc(t.title) + '</div>' +
     '<div class="meta">' + srcBadge(t.source) +
@@ -269,6 +317,7 @@ function render() {
     group('nodue', '📝 期限なし', open.filter(t => !t.due)) +
     group('done', '✅ 完了（直近7日）', done, true);
   $('list').innerHTML = html || '<div class="empty">🎉 やることはありません</div>';
+  paintSelBar();
 }
 
 // ── 読み込み・同期 ──
@@ -319,6 +368,13 @@ $('list').addEventListener('click', e => {
   const li = e.target.closest('li');
   if (!li) return;
   const t = todos.find(x => x.id === li.dataset.id);
+  if (!t) return;
+  if (selecting) {                       // 選択モード：どこを押しても選択の切り替え
+    if (selected.has(t.id)) selected.delete(t.id); else selected.add(t.id);
+    li.classList.toggle('sel', selected.has(t.id));
+    paintSelBar();
+    return;
+  }
   if (e.target.closest('.check')) setDone(t.id, !t.done);
   else if (e.target.closest('.body')) openEdit(t);
 });
@@ -390,10 +446,79 @@ $('eDel').onclick = async () => {
   try { await call('uiDelete', t.id); } catch (err) { toast('削除に失敗しました'); refresh(true); }
 };
 
+// ── 選択して一括操作 ──
+let delArmed = null;
+function disarmDelete() {
+  clearTimeout(delArmed); delArmed = null;
+  $('selDelete').classList.remove('confirm');
+  $('selDelete').textContent = '🗑 削除';
+}
+function paintSelBar() {
+  for (const id of [...selected]) if (!todos.some(t => t.id === id)) selected.delete(id);
+  const n = selected.size;
+  $('selCount').textContent = n + '件を選択';
+  $('selComplete').disabled = n === 0;
+  $('selDelete').disabled = n === 0;
+  if (!n) disarmDelete();
+}
+function setSelecting(on) {
+  selecting = on;
+  selected.clear();
+  if (on) $('toast').classList.remove('show');
+  disarmDelete();
+  document.body.classList.toggle('selecting', on);
+  $('selToggle').classList.toggle('on', on);
+  $('selToggle').textContent = on ? '終了' : '選択';
+  render();
+}
+$('selToggle').onclick = () => setSelecting(!selecting);
+$('selCancel').onclick = () => setSelecting(false);
+$('selNone').onclick = () => { selected.clear(); render(); };
+$('selAll').onclick = () => {
+  document.querySelectorAll('#list li[data-id]').forEach(li => selected.add(li.dataset.id));
+  render();
+};
+$('selDone').onclick = () => {
+  showDone = true;
+  todos.filter(t => t.done).forEach(t => selected.add(t.id));
+  render();
+};
+$('selComplete').onclick = async () => {
+  const ids = [...selected].filter(id => { const t = todos.find(x => x.id === id); return t && !t.done; });
+  if (!ids.length) { toast('選んだものは、もう完了済みです'); return; }
+  const now = new Date().toLocaleString('sv-SE').slice(0, 19);
+  todos.forEach(t => { if (ids.includes(t.id)) { t.done = true; t.doneAt = now; } });
+  setSelecting(false);
+  toast(ids.length + '件を完了にしました 👍', async () => {
+    todos.forEach(t => { if (ids.includes(t.id)) { t.done = false; t.doneAt = ''; } });
+    render();
+    try { await call('uiSetDoneMany', ids, false); } catch (e) { toast('保存に失敗しました'); refresh(true); }
+  });
+  try { await call('uiSetDoneMany', ids, true); } catch (e) { toast('保存に失敗しました'); refresh(true); }
+};
+$('selDelete').onclick = async () => {
+  const ids = [...selected];
+  if (!ids.length) return;
+  if (!delArmed) {                       // 1回目：確認表示（4秒以内にもう一度押すと削除）
+    $('selDelete').classList.add('confirm');
+    $('selDelete').textContent = 'もう一度で削除';
+    delArmed = setTimeout(disarmDelete, 4000);
+    return;
+  }
+  disarmDelete();
+  const backup = todos.slice();
+  todos = todos.filter(t => !selected.has(t.id));
+  setSelecting(false);
+  try {
+    await call('uiDeleteMany', ids);
+    toast(ids.length + '件を削除しました');
+  } catch (e) { todos = backup; render(); toast('削除に失敗しました'); refresh(true); }
+};
+
 $('sync').onclick = () => refresh();
 // 他の端末での変更を取り込む：画面に戻った時＋1分ごと
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
-setInterval(() => { if (!document.hidden && !editing) refresh(true); }, 60000);
+setInterval(() => { if (!document.hidden && !editing && !selecting) refresh(true); }, 60000);
 
 (function init() {
   const d = new Date();

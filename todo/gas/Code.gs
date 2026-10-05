@@ -90,6 +90,8 @@ function api_(action, p) {
     case 'update': return updateTodo_(p.id, p.fields || {});
     case 'setDone': return updateTodo_(p.id, { done: p.done !== false });
     case 'delete': return deleteTodo_(p.id);
+    case 'deleteMany': return deleteMany_(p.ids || []);
+    case 'setDoneMany': return setDoneMany_(p.ids || [], p.done !== false);
     case 'lineLog': return lineLog_(p.limit || 30);
     default: throw new Error('unknown action: ' + action);
   }
@@ -101,6 +103,8 @@ function uiList(key, includeDone) { assertKey_(key); return listTodos_(includeDo
 function uiAdd(key, item) { assertKey_(key); return addTodo_(Object.assign({ source: '手入力' }, item)); }
 function uiUpdate(key, id, fields) { assertKey_(key); return updateTodo_(id, fields); }
 function uiDelete(key, id) { assertKey_(key); return deleteTodo_(id); }
+function uiDeleteMany(key, ids) { assertKey_(key); return deleteMany_(ids); }
+function uiSetDoneMany(key, ids, done) { assertKey_(key); return setDoneMany_(ids, done); }
 
 // ───────────────────────── データ操作 ─────────────────────────
 
@@ -193,6 +197,39 @@ function deleteTodo_(id) {
     if (!t) throw new Error('見つかりません: ' + id);
     sheet_().deleteRow(t._row);
     return { deleted: id };
+  });
+}
+
+/** 選択したものをまとめて削除（下の行から消すので行番号がずれない） */
+function deleteMany_(ids) {
+  const want = {};
+  (ids || []).forEach(id => { want[String(id)] = true; });
+  return withLock_(() => {
+    const sh = sheet_();
+    const rows = readAll_().filter(t => want[t.id]).map(t => t._row).sort((a, b) => b - a);
+    rows.forEach(r => sh.deleteRow(r));
+    return { deleted: rows.length };
+  });
+}
+
+/** 選択したものをまとめて完了（または未完了）にする */
+function setDoneMany_(ids, done) {
+  const want = {};
+  (ids || []).forEach(id => { want[String(id)] = true; });
+  return withLock_(() => {
+    const sh = sheet_();
+    const now = nowStr_();
+    const changed = [];
+    readAll_().filter(t => want[t.id] && t.done !== !!done).forEach(t => {
+      t.done = !!done;
+      t.doneAt = done ? now : '';
+      t.updatedAt = now;
+      const range = sh.getRange(t._row, 1, 1, HEADERS.length);
+      range.offset(0, 3, 1, 1).setNumberFormat('@');
+      range.setValues([toRow_(t)]);
+      changed.push(clean_(t));
+    });
+    return changed;
   });
 }
 
