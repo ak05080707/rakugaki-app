@@ -1,0 +1,472 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>工務TODO 設置手順</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=M+PLUS+1+Code:wght@500&display=swap">
+<style>html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+/* 1カラムの作業手順書。各手順はチェックで進捗管理、コードはコピーボタンで渡す */
+:root {
+  --bg: #F2F4F3;
+  --paper: #FFFFFF;
+  --ink: #1D2A2E;
+  --sub: #5B6B70;
+  --rule: #D8DFDD;
+  --accent: #1E7F5C;       /* スプレッドシートの緑に寄せた色 */
+  --accent-ink: #FFFFFF;
+  --warn-bg: #FFF4DA; --warn-ink: #7A5200;
+  --done: #E3F1EA;
+  --code-bg: #EEF1F0;
+  --font-body: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-code: "M PLUS 1 Code", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121817; --paper: #1A2221; --ink: #E3EAE8; --sub: #93A3A0; --rule: #2B3533;
+  --accent: #4CC08F; --accent-ink: #0E1A15; --warn-bg: #3A2F14; --warn-ink: #F3D48C;
+  --done: #17291F; --code-bg: #222C2A; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121817; --paper: #1A2221; --ink: #E3EAE8; --sub: #93A3A0; --rule: #2B3533;
+  --accent: #4CC08F; --accent-ink: #0E1A15; --warn-bg: #3A2F14; --warn-ink: #F3D48C;
+  --done: #17291F; --code-bg: #222C2A; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font: 15px/1.8 var(--font-body); padding-inline: 16px; padding-block: 24px 64px; }
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+h1 { font-size: 26px; margin: 0; line-height: 1.3; text-wrap: balance; }
+.lead { color: var(--sub); margin: 0; }
+.meter { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.meter .bar { flex: 1; height: 6px; background: var(--rule); border-radius: 99px; overflow: hidden; }
+.meter .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+h2.part { font-size: 13px; letter-spacing: .08em; color: var(--sub); margin: 18px 0 0; font-weight: 700; }
+
+.step { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 16px; display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; }
+.step.is-done { background: var(--done); }
+.step .no { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-weight: 700;
+  display: grid; place-items: center; font-variant-numeric: tabular-nums; cursor: pointer; background: transparent; font-size: 14px; padding: 0; }
+.step.is-done .no { background: var(--accent); color: var(--accent-ink); }
+.step .no:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.step h3 { margin: 2px 0 0; font-size: 17px; line-height: 1.4; }
+.step .body { grid-column: 2; min-width: 0; }
+.step ol, .step ul { margin: 6px 0 0; padding-left: 1.3em; }
+.step li { margin: 2px 0; }
+.ui { display: inline-block; border: 1px solid var(--rule); background: var(--code-bg); border-radius: 5px; padding: 0 6px; font-size: 13px; line-height: 1.7; white-space: nowrap; }
+kbd { font-family: var(--font-code); font-size: 12px; border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--paper); }
+code { font-family: var(--font-code); font-size: 13px; background: var(--code-bg); padding: 0 4px; border-radius: 4px; word-break: break-all; }
+.note { background: var(--warn-bg); color: var(--warn-ink); border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 8px; }
+
+.copy { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.btn { border: 0; background: var(--accent); color: var(--accent-ink); font: 700 14px var(--font-body); border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+.btn.sub { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+.copied { font-size: 13px; color: var(--accent); }
+details { margin-top: 8px; }
+summary { cursor: pointer; font-size: 13px; color: var(--sub); }
+pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height: 260px; overflow: auto; font: 12px/1.5 var(--font-code); margin: 6px 0 0; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.field label { font-size: 13px; color: var(--sub); }
+.field input { border: 1px solid var(--rule); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 9px 10px; font: 14px var(--font-code); width: 100%; box-sizing: border-box; }
+.result { margin-top: 10px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.result .url { flex: 1; min-width: 0; }
+#qr { background: #fff; padding: 8px; border-radius: 8px; line-height: 0; }
+#qr:empty { display: none; }
+.step:not([data-step]) { display: block; }
+.step:not([data-step]) > span:empty { display: none; }
+.cmd { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 6px; }
+.cmd th, .cmd td { border-bottom: 1px solid var(--rule); padding: 6px 8px; text-align: left; vertical-align: top; }
+.cmd th { color: var(--sub); font-weight: 500; font-size: 12px; }
+.small { font-size: 13px; color: var(--sub); margin: 8px 0 0; }
+.step h3 + ul, .step h3 + ol { margin-top: 4px; }
+.trouble dt { font-weight: 700; margin-top: 8px; }
+.trouble dd { margin: 0 0 0 1em; color: var(--sub); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <h1>工務TODO 設置手順</h1>
+  <p class="lead">iPhone・iPad・Windows PC で同じTODOを共有し、LINE・Outlook 2019・Plaud・TimeTree からも取り込める仕組みの設置手順です。Windows PC で、このページと Google を並べて進めると楽です。終わった手順は番号をクリックすると緑になります（進み具合はこのブラウザにだけ保存されます）。</p>
+  <div class="meter"><div class="bar"><i id="meterFill"></i></div><span id="meterText"></span></div>
+
+  <h2 class="part">A. スプレッドシートとスクリプトを作る</h2>
+
+  <div class="step" data-step="1"><button class="no" aria-label="手順1を完了にする">1</button>
+    <h3>スプレッドシートを新しく作る</h3>
+    <div class="body"><ol>
+      <li>いつものGoogleアカウント（Googleドライブと同じ）でログインした Chrome か Edge で <a href="https://sheets.new" target="_blank" rel="noopener">sheets.new</a> を開く</li>
+      <li>左上の <span class="ui">無題のスプレッドシート</span> をクリックして、名前を <b>工務TODO</b> に変える</li>
+    </ol></div></div>
+
+  <div class="step" data-step="2"><button class="no" aria-label="手順2を完了にする">2</button>
+    <h3>Apps Script を開く</h3>
+    <div class="body"><ol>
+      <li>スプレッドシートの上のメニュー <span class="ui">拡張機能</span> → <span class="ui">Apps Script</span></li>
+      <li>新しいタブが開く。左上の <span class="ui">無題のプロジェクト</span> をクリックして <b>工務TODO</b> に変える</li>
+    </ol></div></div>
+
+  <div class="step" data-step="3"><button class="no" aria-label="手順3を完了にする">3</button>
+    <h3>Code.gs を貼り付ける</h3>
+    <div class="body"><ol>
+      <li>左の一覧にある <span class="ui">コード.gs</span> を開く</li>
+      <li>中身をクリックして <kbd>Ctrl</kbd>+<kbd>A</kbd> → <kbd>Delete</kbd> で全部消す</li>
+      <li>下のボタンでコピー → エディタで <kbd>Ctrl</kbd>+<kbd>V</kbd> → <kbd>Ctrl</kbd>+<kbd>S</kbd> で保存</li>
+    </ol>
+    <div class="copy"><button class="btn" data-copy="Code.gs">Code.gs をコピー</button><span class="copied" aria-live="polite"></span></div>
+    <details><summary>中身を見る</summary><pre data-show="Code.gs"></pre></details></div></div>
+
+  <div class="step" data-step="4"><button class="no" aria-label="手順4を完了にする">4</button>
+    <h3>Index（画面）を追加する</h3>
+    <div class="body"><ol>
+      <li>左の <span class="ui">ファイル</span> の横の <span class="ui">＋</span> → <span class="ui">HTML</span></li>
+      <li>名前に <b>Index</b> と入れて <kbd>Enter</kbd>（「.html」は自動で付く。<b>I は大文字</b>）</li>
+      <li>最初から入っている中身を全部消して、コピーしたものを貼り付け → 保存</li>
+    </ol>
+    <div class="copy"><button class="btn" data-copy="Index.html">Index.html をコピー</button><span class="copied" aria-live="polite"></span></div>
+    <details><summary>中身を見る</summary><pre data-show="Index.html"></pre></details></div></div>
+
+  <h2 class="part">B. 初期設定を実行する</h2>
+
+  <div class="step" data-step="5"><button class="no" aria-label="手順5を完了にする">5</button>
+    <h3>setup を実行して「合言葉」をもらう</h3>
+    <div class="body"><ol>
+      <li>エディタ上のツールバーのプルダウン（<span class="ui">myFunction</span> などと表示）で <b>setup</b> を選ぶ → <span class="ui">▷ 実行</span></li>
+      <li><span class="ui">承認が必要です</span> → <span class="ui">権限を確認</span> → 自分のアカウントを選ぶ</li>
+      <li><span class="ui">このアプリは Google で確認されていません</span> と出たら、左下の <span class="ui">詳細</span> → <span class="ui">工務TODO（安全ではないページ）に移動</span> → <span class="ui">許可</span>（チェック欄があれば「すべて選択」）</li>
+      <li>下の実行ログに <code>合言葉(API_KEY): 0a1b2c…</code> と出るので、その英数字をコピーして手順7で使う</li>
+    </ol>
+    <div class="note">「安全ではない」と出るのは、Googleの審査を受けていない自作スクリプトだからです。自分で作ったものなので問題ありません。</div></div></div>
+
+  <h2 class="part">C. 公開して、各端末で開く</h2>
+
+  <div class="step" data-step="6"><button class="no" aria-label="手順6を完了にする">6</button>
+    <h3>ウェブアプリとして公開する</h3>
+    <div class="body"><ol>
+      <li>右上の青い <span class="ui">デプロイ</span> → <span class="ui">新しいデプロイ</span></li>
+      <li>左の歯車 <span class="ui">種類の選択</span> → <span class="ui">ウェブアプリ</span></li>
+      <li>次のユーザーとして実行：<b>自分</b>　／　アクセスできるユーザー：<b>全員</b></li>
+      <li><span class="ui">デプロイ</span> を押す → 出てきた <b>ウェブアプリのURL</b>（…/exec で終わる）をコピー</li>
+    </ol>
+    <div class="note">「全員」にしても、合言葉付きのURLを知らない人は開けません。LINEから届くメッセージを受け取るためにこの設定が必要です。</div></div></div>
+
+  <div class="step" data-step="7"><button class="no" aria-label="手順7を完了にする">7</button>
+    <h3>自分専用のURLを作る</h3>
+    <div class="body">
+      <div class="field"><label for="execUrl">手順6のURL（…/exec）</label><input id="execUrl" placeholder="https://script.google.com/macros/s/……/exec" autocomplete="off"></div>
+      <div class="field"><label for="apiKey">手順5の合言葉</label><input id="apiKey" placeholder="0a1b2c3d…" autocomplete="off"></div>
+      <div class="result">
+        <div class="url"><code id="fullUrl">（上の2つを入れると、ここに完成したURLが出ます）</code>
+          <div class="copy"><button class="btn sub" id="copyUrl">URLをコピー</button><span class="copied" aria-live="polite"></span></div></div>
+        <div id="qr" aria-label="iPhone読み取り用QRコード"></div>
+      </div>
+      <div class="note">入れた内容はこのページの外には送られず、保存もされません。このURLは人に教えないでください。</div>
+    </div></div>
+
+  <div class="step" data-step="8"><button class="no" aria-label="手順8を完了にする">8</button>
+    <h3>iPhone・iPad のホーム画面に置く</h3>
+    <div class="body"><ol>
+      <li>iPhoneのカメラで上のQRコードを読む → <b>Safari</b> で開く</li>
+      <li>下の共有ボタン（四角から↑）→ <span class="ui">ホーム画面に追加</span> → 名前を「工務TODO」→ <span class="ui">追加</span></li>
+      <li>iPadも同じ。上に「Google Apps Script のユーザーが作成したもの」という帯が出るのは正常です</li>
+    </ol></div></div>
+
+  <div class="step" data-step="9"><button class="no" aria-label="手順9を完了にする">9</button>
+    <h3>Windows PC で開く</h3>
+    <div class="body"><ol>
+      <li>Edge で完成したURLを開く</li>
+      <li>右上の <span class="ui">…</span> → <span class="ui">アプリ</span> → <span class="ui">このサイトをアプリとしてインストール</span>（またはお気に入りに登録）</li>
+      <li>試しにPCで1件追加 → iPhoneで開いて同じものが出れば完成</li>
+    </ol></div></div>
+
+
+  <h2 class="part">D. LINE から追加できるようにする（任意・15分）</h2>
+  <p class="lead">自分専用の「LINE公式アカウント」（無料）を作り、そこに送った内容がTODOになる仕組みです。人から届いたLINEは、長押し →「転送」でこのアカウントに送ればTODOになります。</p>
+
+  <div class="step" data-step="10"><button class="no" aria-label="手順10を完了にする">10</button>
+    <h3>LINE公式アカウントを作る</h3>
+    <div class="body"><ol>
+      <li><a href="https://entry.line.biz/start/jp/" target="_blank" rel="noopener">LINE公式アカウントの開設ページ</a> →「LINE公式アカウントをはじめる」→ いつものLINEアカウントでログイン</li>
+      <li>アカウント名は <b>工務TODO</b>、業種は「建設・不動産」など適当でOK → 作成（無料プランのまま）</li>
+    </ol></div></div>
+
+  <div class="step" data-step="11"><button class="no" aria-label="手順11を完了にする">11</button>
+    <h3>Messaging API をオンにする</h3>
+    <div class="body"><ol>
+      <li><a href="https://manager.line.biz/" target="_blank" rel="noopener">LINE Official Account Manager</a> で「工務TODO」を開く</li>
+      <li>右上の <span class="ui">設定</span> → 左の <span class="ui">Messaging API</span> → <span class="ui">Messaging APIを利用する</span></li>
+      <li>プロバイダーを聞かれたら「新規作成」で名前は自分の名前など何でもOK → <span class="ui">OK</span></li>
+      <li>同じ画面の <b>Webhook URL</b> に、手順7で作った <b>自分専用URL（…/exec?key=合言葉）</b> を貼り付けて <span class="ui">保存</span></li>
+    </ol></div></div>
+
+  <div class="step" data-step="12"><button class="no" aria-label="手順12を完了にする">12</button>
+    <h3>自動応答を切って、Webhook をオンにする</h3>
+    <div class="body"><ol>
+      <li>同じ <span class="ui">設定</span> の左メニュー <span class="ui">応答設定</span> を開く</li>
+      <li><b>チャット</b>：オフ　／　<b>あいさつメッセージ</b>：オフ　／　<b>Webhook</b>：オン　／　<b>応答メッセージ</b>：オフ</li>
+    </ol>
+    <div class="note">応答メッセージがオンのままだと「個別の返信はできません」という定型文が毎回返ってきます。</div></div></div>
+
+  <div class="step" data-step="13"><button class="no" aria-label="手順13を完了にする">13</button>
+    <h3>チャネルアクセストークンをコピーする</h3>
+    <div class="body"><ol>
+      <li><a href="https://developers.line.biz/console/" target="_blank" rel="noopener">LINE Developers コンソール</a> を開いてLINEでログイン</li>
+      <li>手順11で作ったプロバイダー → <b>工務TODO</b> のチャネル → 上のタブ <span class="ui">Messaging API設定</span></li>
+      <li>一番下の <span class="ui">チャネルアクセストークン（長期）</span> → <span class="ui">発行</span> → 出てきた長い英数字をコピー</li>
+      <li>同じページの <span class="ui">Webhookの利用</span> がオンになっているか確認</li>
+    </ol>
+    <div class="note">Webhook URL の <span class="ui">検証</span> ボタンはエラー（302など）になることがありますが、Googleの仕組み上よくあることで、実際のメッセージは届きます。手順15で試してください。</div></div></div>
+
+  <div class="step" data-step="14"><button class="no" aria-label="手順14を完了にする">14</button>
+    <h3>トークンを Apps Script に登録する</h3>
+    <div class="body"><ol>
+      <li>Apps Script の画面に戻り、左の歯車 <span class="ui">プロジェクトの設定</span></li>
+      <li>一番下の <span class="ui">スクリプト プロパティを追加</span></li>
+      <li>プロパティ：<code>LINE_CHANNEL_ACCESS_TOKEN</code>（コピーして貼るのが確実）　値：手順13のトークン → <span class="ui">スクリプト プロパティを保存</span></li>
+    </ol>
+    <div class="copy"><button class="btn sub" data-copy-text="LINE_CHANNEL_ACCESS_TOKEN">プロパティ名をコピー</button><span class="copied" aria-live="polite"></span></div>
+    <div class="note">ここは再デプロイ不要です。すぐ反映されます。</div></div></div>
+
+  <div class="step" data-step="15"><button class="no" aria-label="手順15を完了にする">15</button>
+    <h3>友だち追加して、試しに送る</h3>
+    <div class="body"><ol>
+      <li>LINE Developers の <span class="ui">Messaging API設定</span> にあるQRコードを、iPhoneのLINEで読み取って友だち追加</li>
+      <li>「<b>明日 テスト</b>」と送る → 「📝 追加しました：テスト（期限 …）」と返ってくれば成功。TODO画面にも LINE の緑バッジ付きで出ます</li>
+      <li>「<b>一覧</b>」と送ると未完了の一覧、「<b>完了 1</b>」で1番を完了にできます</li>
+    </ol>
+    <div class="note">最初にメッセージを送った人が「持ち主」として登録されます。必ず自分が最初に送ってください。毎朝7時に今日のTODOが届くのもこのアカウントからです。</div></div></div>
+
+
+  <h2 class="part">E. 会社PCの Claude から使えるようにする（10分）</h2>
+  <p class="lead">Outlook 2019 が入っている会社の Windows PC でやります。これで Claude に「フラグ付きメールをTODOにして」などと頼めるようになります。</p>
+
+  <div class="step" data-step="16"><button class="no" aria-label="手順16を完了にする">16</button>
+    <h3>Claude Desktop（パソコン版アプリ）を用意する</h3>
+    <div class="body"><ol>
+      <li>スタートメニューに <b>Claude</b> があるか確認。なければ <a href="https://claude.ai/download" target="_blank" rel="noopener">claude.ai/download</a> から Windows 版を入れてログイン</li>
+      <li>ブラウザ版の claude.ai ではできません。<b>アプリ版</b>が必要です</li>
+    </ol></div></div>
+
+  <div class="step" data-step="17"><button class="no" aria-label="手順17を完了にする">17</button>
+    <h3>インストール用コマンドをコピーする</h3>
+    <div class="body"><ol>
+      <li>手順7の欄にURLと合言葉が入っていることを確認（入っていないと、途中で聞かれます）</li>
+      <li>下のボタンでコピー</li>
+    </ol>
+    <div class="copy"><button class="btn" id="copyInstall">インストール用コマンドをコピー</button><span class="copied" aria-live="polite"></span></div>
+    <p class="lead" id="installState" style="font-size:13px;margin-top:6px"></p>
+    <details><summary>中身を見る（やっていること）</summary><pre id="installShow"></pre></details></div></div>
+
+  <div class="step" data-step="18"><button class="no" aria-label="手順18を完了にする">18</button>
+    <h3>PowerShell に貼り付けて実行する</h3>
+    <div class="body"><ol>
+      <li>スタートボタン → <b>powershell</b> と入力 → <span class="ui">Windows PowerShell</span> をクリック（管理者でなくてOK）</li>
+      <li>青（または黒）い画面で <kbd>Ctrl</kbd>+<kbd>V</kbd> → <kbd>Enter</kbd></li>
+      <li>Node.js が入っていない場合は自動で入ります。「このアプリがデバイスに変更を加えることを許可しますか？」→ <span class="ui">はい</span></li>
+      <li>[1/4]〜[4/4] と進み、緑の字で <b>完了しました</b> と出ればOK（2〜5分）。「TODO ○件を読み込めました」も出ます</li>
+    </ol>
+    <div class="note">赤い字でエラーが出たら、その画面をスクショして Claude に見せてください。</div></div></div>
+
+  <div class="step" data-step="19"><button class="no" aria-label="手順19を完了にする">19</button>
+    <h3>Claude Desktop を再起動する</h3>
+    <div class="body"><ol>
+      <li>画面右下のタスクトレイ（<span class="ui">^</span> の中）の Claude アイコンを右クリック → <span class="ui">終了</span>（×で閉じるだけでは不十分）</li>
+      <li>Claude をもう一度起動</li>
+      <li>左下の自分の名前 → <span class="ui">設定</span> → <span class="ui">開発者</span> に <b>komu-todo</b> が <b>running</b> と出ていれば成功</li>
+    </ol></div></div>
+
+  <div class="step" data-step="20"><button class="no" aria-label="手順20を完了にする">20</button>
+    <h3>Claude に頼んでみる</h3>
+    <div class="body"><ol>
+      <li>Outlook 2019 を起動しておく</li>
+      <li>Claude Desktop の新しいチャットで「<b>TODOの一覧を見せて</b>」→ ツールの使用許可を聞かれたら <span class="ui">常に許可</span></li>
+      <li>「<b>Outlookのフラグ付きメールを見せて</b>」→ Outlookのメールが出れば完成</li>
+    </ol>
+    <div class="note">Outlook に「プログラムが Outlook にアクセスしようとしています」と出たら「許可」を選んでください。</div>
+    <p style="margin:10px 0 0;font-size:14px"><b>頼み方の例</b></p>
+    <ul>
+      <li>「今日の未読メールから、返事や対応が必要なものだけTODOにして」</li>
+      <li>「Plaudの今日の会議から、私の担当分をTODOに追加して」</li>
+      <li>「今日のTODOとOutlookの予定で、朝の段取りを出して」</li>
+      <li>「1週間分の広告メールを一覧にして。〇〇ショップは除外。OKしたら削除済みへ」</li>
+    </ul></div></div>
+
+
+  <h2 class="part">F. TimeTree の予定も読めるようにする（5分）</h2>
+  <p class="lead">会社PCの Claude が TimeTree の予定（共有カレンダーも）を読めるようになります。読むだけで、予定の追加・変更はしません。</p>
+
+  <div class="step" data-step="21"><button class="no" aria-label="手順21を完了にする">21</button>
+    <h3>TimeTree にメールアドレスでログインできるか確認する</h3>
+    <div class="body"><ol>
+      <li>パソコンのブラウザで <a href="https://timetreeapp.com/signin" target="_blank" rel="noopener">timetreeapp.com</a> を開き、<b>メールアドレスとパスワード</b>でログインできるか試す</li>
+      <li>できればOK。LINE・Apple・Google でログインしている場合は、スマホの TimeTree で <span class="ui">設定</span> → <span class="ui">アカウント設定</span> → <span class="ui">メールアドレス</span> を登録してパスワードを決める</li>
+    </ol>
+    <div class="note">TimeTree の公式APIは終了しているため、Web版と同じ仕組みでログインして読みます。TimeTree 側の仕様変更で動かなくなることがあります。パスワードはこのPCの Claude の設定ファイルにだけ保存されます。</div></div></div>
+
+  <div class="step" data-step="22"><button class="no" aria-label="手順22を完了にする">22</button>
+    <h3>Claude を終了して、設定用コマンドを貼り付ける</h3>
+    <div class="body"><ol>
+      <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd> → タスクマネージャーで <b>Claude</b> を右クリック → <span class="ui">タスクの終了</span></li>
+      <li>下のボタンでコピー → PowerShell に <kbd>Ctrl</kbd>+<kbd>V</kbd> → <kbd>Enter</kbd></li>
+      <li>メールアドレスとパスワードを聞かれるので入力（パスワードは画面に出ませんが入力されています）</li>
+      <li>「OK: カレンダー → ○○ / ○○」と出て、緑の字で <b>完了しました</b> と出れば成功</li>
+    </ol>
+    <div class="copy"><button class="btn" data-copy="setup-timetree.ps1">TimeTree 設定用コマンドをコピー</button><span class="copied" aria-live="polite"></span></div>
+    <details><summary>中身を見る（やっていること）</summary><pre data-show="setup-timetree.ps1"></pre></details></div></div>
+
+  <div class="step" data-step="23"><button class="no" aria-label="手順23を完了にする">23</button>
+    <h3>Claude を起動して頼んでみる</h3>
+    <div class="body"><ol>
+      <li>Claude を起動 → 新しいチャットで「<b>TimeTreeの今週の予定を見せて</b>」</li>
+      <li>「<b>今日のTODOとTimeTreeとOutlookの予定をまとめて、段取りを出して</b>」のように組み合わせて使えます</li>
+    </ol></div></div>
+
+
+  <h2 class="part">G. 毎日の使い方</h2>
+  <div class="step"><span></span><div class="body">
+    <h3>TODO画面</h3>
+    <ul>
+      <li>上の入力欄に書いて <span class="ui">追加</span>。期限は <span class="ui">今日</span> <span class="ui">明日</span> <span class="ui">期限なし</span> か日付を選ぶ。急ぎは <span class="ui">🔥 至急</span></li>
+      <li>丸をタップすると完了。緑色＋取り消し線になり、下の「✅ 完了」欄へ移動（間違えたら「元に戻す」）</li>
+      <li>文字をタップすると、内容・メモ・期限・優先度を直せる</li>
+      <li>右上の <span class="ui">選択</span> → タップで複数選ぶ → <span class="ui">🗑 削除</span>（2回押しで確定）や <span class="ui">✓ 完了にする</span> でまとめて処理。<span class="ui">完了済みをすべて</span> で片付けが一瞬</li>
+      <li>並び順は ⚠️期限切れ → 📌今日 → 🗓明日以降 → 📝期限なし → ✅完了。完了分は7日後に自動で非表示</li>
+    </ul>
+    <h3 style="margin-top:12px">LINE（工務TODO アカウントに送る）</h3>
+    <table class="cmd">
+      <tr><th>送る内容</th><th>動き</th></tr>
+      <tr><td><code>A邸 見積提出</code></td><td>期限なしで追加</td></tr>
+      <tr><td><code>明日 B現場 確認</code>／<code>今日 …</code>／<code>明後日 …</code></td><td>期限付きで追加</td></tr>
+      <tr><td><code>10/3 山田様に電話</code></td><td>10月3日期限で追加</td></tr>
+      <tr><td><code>!山口さんに電話</code>／<code>至急 …</code></td><td>🔥至急で追加</td></tr>
+      <tr><td><code>一覧</code></td><td>未完了の一覧が返ってくる</td></tr>
+      <tr><td><code>完了 2</code></td><td>一覧の2番を完了にする</td></tr>
+    </table>
+    <p class="small">毎朝7時に、今日のTODOが届きます。人から来たLINEは、長押し →「転送」で工務TODOに送ればTODOになります。</p>
+    <h3 style="margin-top:12px">会社PCの Claude への頼み方</h3>
+    <ul>
+      <li>「今日の未読メールから、対応が必要なものだけTODOにして」</li>
+      <li>「Outlookのフラグ付きメールをTODOに入れて。期限が書いてあれば期限も」</li>
+      <li>「Plaudの今日の会議から、私の担当分をTODOに追加して」</li>
+      <li>「今日のTODOと、OutlookとTimeTreeの予定をまとめて、今日の段取りを出して」</li>
+    </ul>
+  </div></div>
+
+  <h2 class="part">H. コードを更新するとき（大事）</h2>
+  <div class="step"><span></span><div class="body">
+    <ol>
+      <li>Apps Script で Code.gs・Index.html を貼り替えて <kbd>Ctrl</kbd>+<kbd>S</kbd>（このページの手順3・4のボタンが常に最新版です）</li>
+      <li><span class="ui">デプロイ</span> → <span class="ui">デプロイを管理</span> → 今使っているデプロイの <span class="ui">✏ 鉛筆</span> → バージョン <b>新バージョン</b> → <span class="ui">デプロイ</span></li>
+      <li>スマホは TODO アプリを完全に閉じて開き直す。PC は <kbd>Ctrl</kbd>+<kbd>F5</kbd></li>
+    </ol>
+    <div class="note"><b>「新しいデプロイ」は押さないでください。</b>URLが変わり、LINE・スマホのホーム画面・Claude からつながらなくなります。URLが変わってしまった時は、LINE Developers の Webhook URL・スマホのホーム画面・Claude の設定（手順17〜18をやり直す）をすべて新しいURLに直します。</div>
+  </div></div>
+
+  <h2 class="part">うまくいかない時</h2>
+  <div class="step"><span></span><dl class="trouble body">
+    <dt>「URLの合言葉(key)が違います」と出る</dt><dd>URLの最後が <code>?key=合言葉</code> になっているか確認。手順7で作ったURLを使ってください。</dd>
+    <dt>「スクリプト関数が見つかりません: doGet」と出る</dt><dd>Code.gs が保存されていません。保存してから、<span class="ui">デプロイ</span> → <span class="ui">デプロイを管理</span> → 鉛筆 → バージョン <span class="ui">新バージョン</span> → <span class="ui">デプロイ</span>。</dd>
+    <dt>「setup() を先に実行してください」と出る</dt><dd>手順5をもう一度。プルダウンが setup になっているか確認。</dd>
+    <dt>LINEで送っても返事がない</dt><dd>①Webhook URL の最後が <code>?key=合言葉</code> になっているか　②応答設定で Webhook がオンか　③スクリプトプロパティの名前の綴り　を確認。スプレッドシートの <span class="ui">LINE_LOG</span> シートに記録があれば、届いてはいます（③の可能性大）。</dd>
+    <dt>PowerShell で「winget が見つかりません」</dt><dd><a href="https://nodejs.org/ja" target="_blank" rel="noopener">nodejs.org</a> から LTS 版をダウンロードして入れてから、手順18をもう一度。</dd>
+    <dt>設定の開発者に komu-todo が出ない／failed になる</dt><dd>Claude をタスクトレイから完全に終了して起動し直す。それでもダメなら手順18をもう一度（何度やっても大丈夫。設定は上書きされます）。</dd>
+    <dt>TimeTree で「メールアドレスかパスワードが違います」</dt><dd>ブラウザで timetreeapp.com にメールアドレスでログインできるか確認（手順21）。LINE などでログインしている場合はメールアドレスの登録が必要です。</dd>
+    <dt>TimeTree で「回数制限中です」</dt><dd>ログインを何度も失敗すると一時的にロックされます。30分ほど待ってから手順22をもう一度。</dd>
+    <dt>LINE が急に反映されなくなった</dt><dd>LINE Developers の Webhook URL の <span class="ui">検証</span> が <b>404</b> なら、古いデプロイのURLのままです。<span class="ui">デプロイを管理</span> で今のURLを確認し、<code>?key=合言葉</code> を付けて貼り直します（302 なら正常）。</dd>
+    <dt>コードを更新したのに画面が変わらない</dt><dd>「新バージョン」でデプロイしたか確認（H）。そのうえでスマホはアプリを完全に閉じて開き直す、PC は <kbd>Ctrl</kbd>+<kbd>F5</kbd>。</dd>
+    <dt>画面が真っ白</dt><dd>HTMLファイルの名前が <b>Index</b>（Iが大文字）になっているか確認。</dd>
+  </dl></div>
+</div>
+
+<script type="application/json" id="files">{"Code.gs": "/**\n * 工務部 TODO — Google Apps Script バックエンド\n *\n * ・スプレッドシートの「TODO」シートにタスクを保存（iPhone / iPad / PC で共有）\n * ・doGet  : 画面（Index.html）を返す。?key=合言葉 が必要\n * ・doPost : ① MCPコネクターからのAPI呼び出し ② LINE Webhook\n * ・morningPush : 毎朝、今日のTODOをLINEに送る（トリガーで実行）\n *\n * スクリプトプロパティ\n *   API_KEY                    … 合言葉（必須）\n *   LINE_CHANNEL_ACCESS_TOKEN  … LINE Messaging API のチャネルアクセストークン（任意）\n *   LINE_OWNER_USER_ID         … 自分の LINE userId（初回メッセージで自動登録）\n */\n\nconst SHEET_TODO = 'TODO';\nconst SHEET_LINE = 'LINE_LOG';\nconst HEADERS = ['id', 'title', 'memo', 'due', 'priority', 'source', 'ref',\n  'done', 'doneAt', 'createdAt', 'updatedAt'];\nconst TZ = 'Asia/Tokyo';\n\n// ───────────────────────── 初期設定 ─────────────────────────\n\n/** 最初に1回だけ手動実行：シート作成・合言葉発行・朝7時のLINE通知トリガー登録 */\nfunction setup() {\n  const ss = SpreadsheetApp.getActive();\n  let sh = ss.getSheetByName(SHEET_TODO);\n  if (!sh) sh = ss.insertSheet(SHEET_TODO);\n  if (sh.getLastRow() === 0) {\n    sh.appendRow(HEADERS);\n    sh.setFrozenRows(1);\n  }\n  let log = ss.getSheetByName(SHEET_LINE);\n  if (!log) {\n    log = ss.insertSheet(SHEET_LINE);\n    log.appendRow(['receivedAt', 'userId', 'text']);\n    log.setFrozenRows(1);\n  }\n  const props = PropertiesService.getScriptProperties();\n  if (!props.getProperty('API_KEY')) {\n    props.setProperty('API_KEY', Utilities.getUuid().replace(/-/g, ''));\n  }\n  ScriptApp.getProjectTriggers()\n    .filter(t => t.getHandlerFunction() === 'morningPush')\n    .forEach(t => ScriptApp.deleteTrigger(t));\n  ScriptApp.newTrigger('morningPush').timeBased().atHour(7).everyDays(1)\n    .inTimezone(TZ).create();\n  Logger.log('合言葉(API_KEY): ' + props.getProperty('API_KEY'));\n}\n\n// ───────────────────────── 入口 ─────────────────────────\n\nfunction doGet(e) {\n  if (!checkKey_(e.parameter.key)) {\n    return HtmlService.createHtmlOutput('<p style=\"font:16px sans-serif;padding:24px\">URLの合言葉(key)が違います。<\/p>');\n  }\n  const t = HtmlService.createTemplateFromFile('Index');\n  t.key = e.parameter.key;\n  return t.evaluate()\n    .setTitle('工務TODO')\n    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')\n    .addMetaTag('apple-mobile-web-app-capable', 'yes')\n    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);\n}\n\nfunction doPost(e) {\n  let body = {};\n  try { body = JSON.parse(e.postData.contents || '{}'); } catch (err) { return json_({ ok: false, error: 'bad json' }); }\n\n  // LINE Webhook（URL に ?key=合言葉 を付けて登録する）\n  if (Array.isArray(body.events)) {\n    if (!checkKey_(e.parameter.key)) return json_({ ok: false });\n    body.events.forEach(ev => { try { handleLineEvent_(ev); } catch (err) { console.error(err); } });\n    return json_({ ok: true });\n  }\n\n  // MCP / 外部API\n  if (!checkKey_(body.key)) return json_({ ok: false, error: 'unauthorized' });\n  try {\n    return json_({ ok: true, result: api_(body.action, body) });\n  } catch (err) {\n    return json_({ ok: false, error: String(err.message || err) });\n  }\n}\n\nfunction api_(action, p) {\n  switch (action) {\n    case 'list': return listTodos_(!!p.includeDone);\n    case 'add': return addTodo_(p);\n    case 'addMany': return (p.items || []).map(addTodo_);\n    case 'update': return updateTodo_(p.id, p.fields || {});\n    case 'setDone': return updateTodo_(p.id, { done: p.done !== false });\n    case 'delete': return deleteTodo_(p.id);\n    case 'deleteMany': return deleteMany_(p.ids || []);\n    case 'setDoneMany': return setDoneMany_(p.ids || [], p.done !== false);\n    case 'lineLog': return lineLog_(p.limit || 30);\n    default: throw new Error('unknown action: ' + action);\n  }\n}\n\n// ───── 画面（google.script.run）から呼ぶ関数。すべて合言葉チェック付き ─────\n\nfunction uiList(key, includeDone) { assertKey_(key); return listTodos_(includeDone); }\nfunction uiAdd(key, item) { assertKey_(key); return addTodo_(Object.assign({ source: '手入力' }, item)); }\nfunction uiUpdate(key, id, fields) { assertKey_(key); return updateTodo_(id, fields); }\nfunction uiDelete(key, id) { assertKey_(key); return deleteTodo_(id); }\nfunction uiDeleteMany(key, ids) { assertKey_(key); return deleteMany_(ids); }\nfunction uiSetDoneMany(key, ids, done) { assertKey_(key); return setDoneMany_(ids, done); }\n\n// ───────────────────────── データ操作 ─────────────────────────\n\nfunction sheet_() {\n  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_TODO);\n  if (!sh) throw new Error('setup() を先に実行してください');\n  return sh;\n}\n\nfunction readAll_() {\n  const sh = sheet_();\n  const n = sh.getLastRow() - 1;\n  if (n <= 0) return [];\n  return sh.getRange(2, 1, n, HEADERS.length).getValues().map((r, i) => {\n    const o = { _row: i + 2 };\n    HEADERS.forEach((h, j) => { o[h] = r[j]; });\n    o.done = o.done === true || o.done === 'TRUE';\n    o.due = fmtDate_(o.due);\n    o.doneAt = fmtTime_(o.doneAt);\n    o.createdAt = fmtTime_(o.createdAt);\n    o.updatedAt = fmtTime_(o.updatedAt);\n    o.id = String(o.id);\n    return o;\n  });\n}\n\nfunction toRow_(o) {\n  return HEADERS.map(h => (o[h] === undefined || o[h] === null) ? '' : o[h]);\n}\n\nfunction clean_(o) { const c = Object.assign({}, o); delete c._row; return c; }\n\n/** 未完了＋直近7日の完了分を返す（includeDone=true なら全件） */\nfunction listTodos_(includeDone) {\n  const limit = Date.now() - 7 * 24 * 3600 * 1000;\n  return readAll_()\n    .filter(t => includeDone || !t.done || !t.doneAt || new Date(t.doneAt.replace(' ', 'T') + '+09:00').getTime() >= limit)\n    .map(clean_);\n}\n\nfunction addTodo_(p) {\n  const title = String(p.title || '').trim();\n  if (!title) throw new Error('title が空です');\n  return withLock_(() => {\n    // ref（メールID・Plaud ID など）が同じものは二重登録しない\n    if (p.ref) {\n      const dup = readAll_().find(t => t.ref && String(t.ref) === String(p.ref));\n      if (dup) return Object.assign(clean_(dup), { duplicate: true });\n    }\n    const now = nowStr_();\n    const o = {\n      id: Utilities.getUuid().slice(0, 8),\n      title: title,\n      memo: p.memo || '',\n      due: normDue_(p.due),\n      priority: ['高', '中', '低'].indexOf(p.priority) >= 0 ? p.priority : '中',\n      source: p.source || 'API',\n      ref: p.ref || '',\n      done: false, doneAt: '', createdAt: now, updatedAt: now\n    };\n    const sh = sheet_();\n    sh.appendRow(toRow_(o));\n    sh.getRange(sh.getLastRow(), 4).setNumberFormat('@').setValue(o.due); // 日付の自動変換を防ぐ\n    return o;\n  });\n}\n\nfunction updateTodo_(id, fields) {\n  return withLock_(() => {\n    const t = readAll_().find(x => x.id === String(id));\n    if (!t) throw new Error('見つかりません: ' + id);\n    ['title', 'memo', 'priority'].forEach(k => { if (fields[k] !== undefined) t[k] = fields[k]; });\n    if (fields.due !== undefined) t.due = normDue_(fields.due);\n    if (fields.done !== undefined) {\n      const d = fields.done === true || fields.done === 'true';\n      if (d !== t.done) t.doneAt = d ? nowStr_() : '';\n      t.done = d;\n    }\n    t.updatedAt = nowStr_();\n    const range = sheet_().getRange(t._row, 1, 1, HEADERS.length);\n    range.offset(0, 3, 1, 1).setNumberFormat('@');\n    range.setValues([toRow_(t)]);\n    return clean_(t);\n  });\n}\n\nfunction deleteTodo_(id) {\n  return withLock_(() => {\n    const t = readAll_().find(x => x.id === String(id));\n    if (!t) throw new Error('見つかりません: ' + id);\n    sheet_().deleteRow(t._row);\n    return { deleted: id };\n  });\n}\n\n/** 選択したものをまとめて削除（下の行から消すので行番号がずれない） */\nfunction deleteMany_(ids) {\n  const want = {};\n  (ids || []).forEach(id => { want[String(id)] = true; });\n  return withLock_(() => {\n    const sh = sheet_();\n    const rows = readAll_().filter(t => want[t.id]).map(t => t._row).sort((a, b) => b - a);\n    rows.forEach(r => sh.deleteRow(r));\n    return { deleted: rows.length };\n  });\n}\n\n/** 選択したものをまとめて完了（または未完了）にする */\nfunction setDoneMany_(ids, done) {\n  const want = {};\n  (ids || []).forEach(id => { want[String(id)] = true; });\n  return withLock_(() => {\n    const sh = sheet_();\n    const now = nowStr_();\n    const changed = [];\n    readAll_().filter(t => want[t.id] && t.done !== !!done).forEach(t => {\n      t.done = !!done;\n      t.doneAt = done ? now : '';\n      t.updatedAt = now;\n      const range = sh.getRange(t._row, 1, 1, HEADERS.length);\n      range.offset(0, 3, 1, 1).setNumberFormat('@');\n      range.setValues([toRow_(t)]);\n      changed.push(clean_(t));\n    });\n    return changed;\n  });\n}\n\n// ───────────────────────── LINE ─────────────────────────\n\nfunction handleLineEvent_(ev) {\n  if (ev.type !== 'message' || !ev.message || ev.message.type !== 'text') return;\n  const props = PropertiesService.getScriptProperties();\n  const userId = ev.source && ev.source.userId;\n  const text = String(ev.message.text).trim();\n  SpreadsheetApp.getActive().getSheetByName(SHEET_LINE).appendRow([nowStr_(), userId, text]);\n\n  let owner = props.getProperty('LINE_OWNER_USER_ID');\n  if (!owner && userId) {           // 最初に話しかけた人を持ち主として登録\n    props.setProperty('LINE_OWNER_USER_ID', userId);\n    owner = userId;\n  }\n  if (userId !== owner) return;     // 持ち主以外は記録だけ\n\n  let reply;\n  if (/^(一覧|リスト|今日|todo)$/i.test(text)) {\n    reply = summaryText_();\n  } else {\n    const m = text.match(/^(完了|済|done)\\s*(\\d+)$/i);\n    if (m) {\n      const open = openSorted_();\n      const t = open[Number(m[2]) - 1];\n      if (t) { updateTodo_(t.id, { done: true }); reply = '✅ 完了にしました：' + t.title; }\n      else reply = 'その番号はありません。「一覧」で確認してください。';\n    } else {\n      const parsed = parseLineText_(text);\n      const o = addTodo_(Object.assign(parsed, { source: 'LINE' }));\n      reply = '📝 追加しました：' + o.title + (o.due ? '（期限 ' + o.due + '）' : '');\n    }\n  }\n  lineReply_(ev.replyToken, reply);\n}\n\n/** 「明日 見積 A社」「10/3 現場確認」「!至急 電話」などを解釈 */\nfunction parseLineText_(text) {\n  let due = '', priority = '中', t = text;\n  const today = new Date();\n  const dm = t.match(/^(今日|明日|明後日|あさって|(\\d{1,2})[\\/月](\\d{1,2})日?)\\s*/);\n  if (dm) {\n    const d = new Date(today);\n    if (dm[1] === '明日') d.setDate(d.getDate() + 1);\n    else if (dm[1] === '明後日' || dm[1] === 'あさって') d.setDate(d.getDate() + 2);\n    else if (dm[2]) {\n      d.setMonth(Number(dm[2]) - 1, Number(dm[3]));\n      if (d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) d.setFullYear(d.getFullYear() + 1);\n    }\n    due = Utilities.formatDate(d, TZ, 'yyyy-MM-dd');\n    t = t.slice(dm[0].length);\n  }\n  if (/^[!！]|至急|急ぎ/.test(t)) { priority = '高'; t = t.replace(/^[!！]\\s*/, ''); }\n  return { title: t || text, due: due, priority: priority };\n}\n\nfunction openSorted_() {\n  const pr = { '高': 0, '中': 1, '低': 2 };\n  return readAll_().filter(t => !t.done).sort((a, b) =>\n    (a.due || '9999') .localeCompare(b.due || '9999') || pr[a.priority] - pr[b.priority]);\n}\n\nfunction summaryText_() {\n  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');\n  const open = openSorted_();\n  if (!open.length) return '🎉 未完了のTODOはありません';\n  const lines = open.slice(0, 20).map((t, i) => {\n    const mark = t.due && t.due < today ? '⚠️' : t.due === today ? '📌' : '・';\n    return (i + 1) + '. ' + mark + t.title + (t.due ? ' (' + t.due.slice(5).replace('-', '/') + ')' : '');\n  });\n  return '📋 未完了 ' + open.length + '件\\n' + lines.join('\\n') + '\\n\\n「完了 番号」で完了にできます';\n}\n\nfunction lineLog_(limit) {\n  const sh = SpreadsheetApp.getActive().getSheetByName(SHEET_LINE);\n  const n = sh.getLastRow() - 1;\n  if (n <= 0) return [];\n  const start = Math.max(2, sh.getLastRow() - limit + 1);\n  return sh.getRange(start, 1, sh.getLastRow() - start + 1, 3).getValues()\n    .map(r => ({ receivedAt: fmtTime_(r[0]), userId: r[1], text: r[2] })).reverse();\n}\n\nfunction lineReply_(replyToken, text) {\n  const token = PropertiesService.getScriptProperties().getProperty('LINE_CHANNEL_ACCESS_TOKEN');\n  if (!token || !replyToken) return;\n  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {\n    method: 'post', contentType: 'application/json',\n    headers: { Authorization: 'Bearer ' + token },\n    payload: JSON.stringify({ replyToken: replyToken, messages: [{ type: 'text', text: text.slice(0, 4900) }] }),\n    muteHttpExceptions: true\n  });\n}\n\n/** 毎朝7時：今日のTODOをLINEへプッシュ（トークンと持ち主が設定済みの場合） */\nfunction morningPush() {\n  const props = PropertiesService.getScriptProperties();\n  const token = props.getProperty('LINE_CHANNEL_ACCESS_TOKEN');\n  const owner = props.getProperty('LINE_OWNER_USER_ID');\n  if (!token || !owner) return;\n  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {\n    method: 'post', contentType: 'application/json',\n    headers: { Authorization: 'Bearer ' + token },\n    payload: JSON.stringify({ to: owner, messages: [{ type: 'text', text: 'おはようございます☀️\\n' + summaryText_() }] }),\n    muteHttpExceptions: true\n  });\n}\n\n// ───────────────────────── 共通 ─────────────────────────\n\nfunction checkKey_(key) {\n  const k = PropertiesService.getScriptProperties().getProperty('API_KEY');\n  return !!k && key === k;\n}\nfunction assertKey_(key) { if (!checkKey_(key)) throw new Error('unauthorized'); }\n\nfunction withLock_(fn) {\n  const lock = LockService.getScriptLock();\n  lock.waitLock(20000);\n  try { return fn(); } finally { lock.releaseLock(); }\n}\n\nfunction json_(o) {\n  return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);\n}\n\nfunction nowStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }\nfunction fmtTime_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm:ss') : String(v || ''); }\nfunction fmtDate_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || ''); }\n\nfunction normDue_(v) {\n  if (!v) return '';\n  if (v instanceof Date) return fmtDate_(v);\n  const m = String(v).match(/(\\d{4})[-\\/](\\d{1,2})[-\\/](\\d{1,2})/);\n  if (!m) return '';\n  return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);\n}\n", "Index.html": "<!DOCTYPE html>\n<html lang=\"ja\">\n<head>\n<base target=\"_top\">\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>工務TODO<\/title>\n<style>\n:root {\n  --bg: #F3F4F7;\n  --card: #FFFFFF;\n  --text: #1C1F26;\n  --muted: #6B7080;\n  --line: #E1E3E8;\n  --accent: #2F6BFF;\n  --danger: #E04848;\n  --today: #F29D1F;\n  --done-bg: #EEF7F0;\n  --done-text: #8A9A8E;\n  --ok: #2EA85A;\n  --hi: #E04848; --mid: #F2B233; --lo: #9AA3B2;\n  --src-line: #06C755; --src-outlook: #0F6CBD; --src-plaud: #7B4DFF; --src-api: #6B7080;\n  --shadow: 0 1px 2px rgba(20,24,33,.06), 0 2px 8px rgba(20,24,33,.04);\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --bg: #111318; --card: #1B1E25; --text: #E6E8EC; --muted: #8A90A0; --line: #2A2E37;\n    --accent: #6B93FF; --danger: #F06B6B; --today: #F5B04A;\n    --done-bg: #17221B; --done-text: #5E6E63; --ok: #45C173;\n    --shadow: none;\n  }\n}\n* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }\nhtml, body { margin: 0; background: var(--bg); color: var(--text);\n  font: 16px/1.5 -apple-system, BlinkMacSystemFont, \"Hiragino Sans\", \"Yu Gothic UI\", \"Meiryo\", sans-serif; }\n.wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 120px; padding-top: max(16px, env(safe-area-inset-top)); }\n\nheader { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }\nheader h1 { font-size: 24px; margin: 0; letter-spacing: .02em; }\nheader .date { color: var(--muted); font-size: 14px; }\n.sync { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 6px 8px; cursor: pointer; border-radius: 8px; }\n.sync:hover { background: var(--line); }\n\n.progress { background: var(--card); border-radius: 14px; padding: 12px 14px; box-shadow: var(--shadow); margin-bottom: 12px; }\n.progress .row { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); }\n.progress .row b { color: var(--text); font-size: 16px; }\n.bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 8px; }\n.bar > i { display: block; height: 100%; width: 0; background: var(--ok); border-radius: 99px; transition: width .5s ease; }\n\n.add { background: var(--card); border-radius: 14px; padding: 10px; box-shadow: var(--shadow); margin-bottom: 16px; }\n.add .line1 { display: flex; gap: 8px; }\n.add input[type=text] { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--text);\n  border-radius: 10px; padding: 10px 12px; font-size: 16px; outline: none; }\n.add input[type=text]:focus { border-color: var(--accent); }\n.btn { border: 0; background: var(--accent); color: #fff; font-weight: 600; font-size: 15px; border-radius: 10px; padding: 0 16px; cursor: pointer; }\n.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }\n.chip { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 99px; padding: 4px 12px; font-size: 13px; cursor: pointer; }\n.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }\n.chip.hi.on { background: var(--hi); border-color: var(--hi); }\n.chips input[type=date] { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 99px; padding: 3px 10px; font-size: 13px; }\n\n.tabs { display: flex; gap: 4px; background: var(--line); padding: 3px; border-radius: 10px; margin-bottom: 14px; }\n.tabs button { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 7px 0; border-radius: 8px; font-size: 14px; cursor: pointer; }\n.tabs button.on { background: var(--card); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }\n\nsection { margin-bottom: 18px; }\nsection h2 { font-size: 13px; color: var(--muted); margin: 0 4px 6px; font-weight: 600; display: flex; gap: 6px; align-items: center; }\nsection h2 .n { background: var(--line); border-radius: 99px; padding: 0 8px; font-size: 12px; }\nsection.over h2 { color: var(--danger); }\nsection.today h2 { color: var(--today); }\nsection.done h2 { cursor: pointer; user-select: none; }\nul { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }\nli { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line);\n  border-left: 4px solid transparent; transition: background .3s, opacity .3s, transform .3s; }\nli:first-child { border-top: 0; }\nli.p-高 { border-left-color: var(--hi); }\nli.p-中 { border-left-color: var(--mid); }\nli.p-低 { border-left-color: var(--lo); }\nli.is-done { background: var(--done-bg); border-left-color: var(--ok); }\nli.is-done .title { color: var(--done-text); text-decoration: line-through; }\nli.leaving { opacity: 0; transform: translateX(24px); }\n\n.check { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--muted); background: transparent;\n  display: grid; place-items: center; cursor: pointer; padding: 0; margin-top: 1px; transition: all .2s; }\n.check svg { width: 14px; height: 14px; stroke: #fff; stroke-width: 3; fill: none; opacity: 0; transform: scale(.4); transition: all .2s; }\nli.is-done .check { background: var(--ok); border-color: var(--ok); }\nli.is-done .check svg { opacity: 1; transform: scale(1); }\n.body { flex: 1; min-width: 0; cursor: pointer; }\n.title { word-break: break-word; }\n.meta { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 2px; }\n.meta .due.over { color: var(--danger); font-weight: 600; }\n.meta .due.today { color: var(--today); font-weight: 600; }\n.src { border-radius: 4px; padding: 0 6px; color: #fff; font-size: 11px; line-height: 18px; }\n.src-LINE { background: var(--src-line); } .src-Outlook { background: var(--src-outlook); }\n.src-Plaud { background: var(--src-plaud); } .src-other { background: var(--src-api); }\n.memo { font-size: 13px; color: var(--muted); margin-top: 2px; white-space: pre-wrap; }\n.empty { text-align: center; color: var(--muted); padding: 40px 0; }\n\n.sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: flex-end; justify-content: center; z-index: 10; }\n.sheet-bg.show { display: flex; }\n.sheet { background: var(--card); width: 100%; max-width: 560px; border-radius: 18px 18px 0 0; padding: 18px 16px;\n  padding-bottom: max(18px, env(safe-area-inset-bottom)); }\n@media (min-width: 600px) { .sheet-bg { align-items: center; } .sheet { border-radius: 18px; } }\n.sheet label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }\n.sheet input, .sheet textarea, .sheet select { width: 100%; border: 1px solid var(--line); background: var(--bg); color: var(--text);\n  border-radius: 10px; padding: 10px; font: inherit; }\n.sheet textarea { min-height: 80px; resize: vertical; }\n.sheet .acts { display: flex; gap: 8px; margin-top: 16px; }\n.sheet .acts .btn { padding: 10px 16px; }\n.btn.ghost { background: var(--line); color: var(--text); }\n.btn.del { background: transparent; color: var(--danger); margin-right: auto; }\n\n/* 選択モード */\n.head-btns { display: flex; gap: 4px; align-items: center; }\n.sel-toggle { border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 13px; padding: 5px 12px; border-radius: 99px; cursor: pointer; }\n.sel-toggle.on { background: var(--text); color: var(--bg); border-color: var(--text); }\nbody.selecting .check { border-radius: 7px; }\nbody.selecting li.is-done .check { background: transparent; border-color: var(--muted); }\nbody.selecting li.is-done .check svg { opacity: 0; }\nbody.selecting li { cursor: pointer; }\nbody.selecting li.sel { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }\nbody.selecting li.sel .check { background: var(--accent); border-color: var(--accent); }\nbody.selecting li.sel .check svg { opacity: 1; transform: scale(1); }\nbody.selecting .add, body.selecting .tabs { opacity: .45; pointer-events: none; }\n.selbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--card); border-top: 1px solid var(--line);\n  box-shadow: 0 -4px 16px rgba(0,0,0,.08); padding: 10px 16px; padding-bottom: max(10px, env(safe-area-inset-bottom)); display: none; }\nbody.selecting .selbar { display: block; }\n.selbar .in { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }\n.selbar .row1 { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }\n.selbar .count { font-weight: 700; margin-right: auto; }\n.selbar .row2 { display: flex; gap: 8px; }\n.selbar .row2 .btn { flex: 1; padding: 11px 4px; white-space: nowrap; font-size: 14px; }\n.btn.danger { background: var(--danger); }\n.btn.danger.confirm { box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 35%, transparent); }\n.btn:disabled { opacity: .4; cursor: default; }\n\n.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(80px); background: var(--text); color: var(--bg);\n  padding: 10px 16px; border-radius: 10px; font-size: 14px; transition: transform .25s; z-index: 20; display: flex; gap: 12px; align-items: center; white-space: nowrap; }\n.toast.show { transform: translateX(-50%) translateY(0); }\nbody.selecting .toast.show { transform: translateX(-50%) translateY(-110px); }\n.toast button { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; }\n<\/style>\n<\/head>\n<body>\n<div class=\"wrap\">\n  <header>\n    <div>\n      <div class=\"date\" id=\"today\"><\/div>\n      <h1>今日のTODO<\/h1>\n    <\/div>\n    <div class=\"head-btns\">\n      <button class=\"sync\" id=\"sync\" title=\"最新に更新\">⟳ <span id=\"syncAt\">読込中…<\/span><\/button>\n      <button class=\"sel-toggle\" id=\"selToggle\">選択<\/button>\n    <\/div>\n  <\/header>\n\n  <div class=\"progress\">\n    <div class=\"row\"><span>今日の進み具合<\/span><span><b id=\"doneN\">0<\/b> / <span id=\"allN\">0<\/span> 完了<\/span><\/div>\n    <div class=\"bar\"><i id=\"barFill\"><\/i><\/div>\n  <\/div>\n\n  <form class=\"add\" id=\"addForm\" autocomplete=\"off\">\n    <div class=\"line1\">\n      <input type=\"text\" id=\"addTitle\" placeholder=\"やることを入力（例：A邸 見積提出）\" enterkeyhint=\"done\">\n      <button class=\"btn\" type=\"submit\">追加<\/button>\n    <\/div>\n    <div class=\"chips\" id=\"dueChips\">\n      <button type=\"button\" class=\"chip on\" data-due=\"today\">今日<\/button>\n      <button type=\"button\" class=\"chip\" data-due=\"tomorrow\">明日<\/button>\n      <button type=\"button\" class=\"chip\" data-due=\"\">期限なし<\/button>\n      <input type=\"date\" id=\"dueDate\" aria-label=\"日付を指定\">\n      <button type=\"button\" class=\"chip hi\" id=\"hiChip\">🔥 至急<\/button>\n    <\/div>\n  <\/form>\n\n  <div class=\"tabs\" id=\"tabs\">\n    <button class=\"on\" data-f=\"all\">すべて<\/button>\n    <button data-f=\"today\">今日まで<\/button>\n    <button data-f=\"src\">連携から<\/button>\n  <\/div>\n\n  <div id=\"list\"><\/div>\n<\/div>\n\n<div class=\"sheet-bg\" id=\"sheetBg\">\n  <form class=\"sheet\" id=\"editForm\">\n    <label>やること<\/label><input type=\"text\" id=\"eTitle\" required>\n    <label>メモ<\/label><textarea id=\"eMemo\"><\/textarea>\n    <label>期限<\/label><input type=\"date\" id=\"eDue\">\n    <label>優先度<\/label>\n    <select id=\"ePri\"><option>高<\/option><option>中<\/option><option>低<\/option><\/select>\n    <div class=\"acts\">\n      <button type=\"button\" class=\"btn del\" id=\"eDel\">削除<\/button>\n      <button type=\"button\" class=\"btn ghost\" id=\"eCancel\">閉じる<\/button>\n      <button type=\"submit\" class=\"btn\">保存<\/button>\n    <\/div>\n  <\/form>\n<\/div>\n\n<div class=\"selbar\" id=\"selBar\">\n  <div class=\"in\">\n    <div class=\"row1\">\n      <span class=\"count\" id=\"selCount\">0件を選択<\/span>\n      <button type=\"button\" class=\"chip\" id=\"selAll\">表示中をすべて<\/button>\n      <button type=\"button\" class=\"chip\" id=\"selDone\">完了済みをすべて<\/button>\n      <button type=\"button\" class=\"chip\" id=\"selNone\">選択を解除<\/button>\n    <\/div>\n    <div class=\"row2\">\n      <button type=\"button\" class=\"btn ghost\" id=\"selCancel\">やめる<\/button>\n      <button type=\"button\" class=\"btn\" id=\"selComplete\">✓ 完了にする<\/button>\n      <button type=\"button\" class=\"btn danger\" id=\"selDelete\">🗑 削除<\/button>\n    <\/div>\n  <\/div>\n<\/div>\n\n<div class=\"toast\" id=\"toast\"><span id=\"toastMsg\"><\/span><button id=\"toastUndo\" hidden>元に戻す<\/button><\/div>\n\n<script>\nconst KEY = '<?= key ?>';\nlet todos = [];\nlet filter = 'all';\nlet showDone = true;\nlet addDue = 'today';\nlet addHi = false;\nlet editing = null;\nlet selecting = false;\nconst selected = new Set();\n\n// ── サーバー呼び出し（GAS上なら google.script.run、ローカル確認用にモックあり） ──\nfunction call(fn, ...args) {\n  if (window.google && google.script && google.script.run) {\n    return new Promise((res, rej) =>\n      google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](KEY, ...args));\n  }\n  return mock[fn](...args);\n}\nconst mock = (() => {\n  const load = () => { try { return JSON.parse(localStorage.getItem('todo-mock') || '[]'); } catch (e) { return []; } };\n  const save = a => { try { localStorage.setItem('todo-mock', JSON.stringify(a)); } catch (e) {} };\n  const now = () => new Date().toISOString().replace('T', ' ').slice(0, 19);\n  return {\n    async uiList() { return load(); },\n    async uiAdd(p) { const a = load(); const o = { id: Math.random().toString(16).slice(2, 10), memo: '', priority: '中', source: '手入力', ref: '', done: false, doneAt: '', createdAt: now(), updatedAt: now(), ...p }; a.push(o); save(a); return o; },\n    async uiUpdate(id, f) { const a = load(); const t = a.find(x => x.id === id); if ('done' in f) t.doneAt = f.done ? now() : ''; Object.assign(t, f, { updatedAt: now() }); save(a); return t; },\n    async uiDelete(id) { save(load().filter(x => x.id !== id)); return { deleted: id }; },\n    async uiDeleteMany(ids) { const a = load(); save(a.filter(x => !ids.includes(x.id))); return { deleted: a.length - load().length }; },\n    async uiSetDoneMany(ids, done) { const a = load(); const ch = []; a.forEach(t => { if (ids.includes(t.id) && t.done !== done) { t.done = done; t.doneAt = done ? now() : ''; ch.push(t); } }); save(a); return ch; }\n  };\n})();\n\n// ── 日付 ──\nconst pad = n => String(n).padStart(2, '0');\nconst ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());\nconst todayStr = () => ymd(new Date());\nconst tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate() + 1); return ymd(d); };\nconst WD = ['日', '月', '火', '水', '木', '金', '土'];\nfunction dueLabel(s) {\n  if (!s) return '';\n  if (s === todayStr()) return '今日';\n  if (s === tomorrowStr()) return '明日';\n  const d = new Date(s + 'T00:00');\n  return (d.getMonth() + 1) + '/' + d.getDate() + '(' + WD[d.getDay()] + ')';\n}\n\n// ── 描画 ──\nconst $ = id => document.getElementById(id);\nconst esc = s => String(s).replace(/[&<>\"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[c]));\nconst PR = { '高': 0, '中': 1, '低': 2 };\nconst byDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999') || PR[a.priority] - PR[b.priority] || a.createdAt.localeCompare(b.createdAt);\n\nfunction srcBadge(s) {\n  if (!s || s === '手入力') return '';\n  const cls = ['LINE', 'Outlook', 'Plaud'].includes(s) ? s : 'other';\n  return '<span class=\"src src-' + cls + '\">' + esc(s) + '<\/span>';\n}\n\nfunction item(t) {\n  const today = todayStr();\n  const dueCls = !t.done && t.due && t.due < today ? 'over' : t.due === today ? 'today' : '';\n  return '<li class=\"p-' + esc(t.priority) + (t.done ? ' is-done' : '') + (selected.has(t.id) ? ' sel' : '') + '\" data-id=\"' + esc(t.id) + '\">' +\n    '<button class=\"check\" aria-label=\"完了\"><svg viewBox=\"0 0 24 24\"><path d=\"M5 12.5l4.5 4.5L19 7.5\"/><\/svg><\/button>' +\n    '<div class=\"body\"><div class=\"title\">' + esc(t.title) + '<\/div>' +\n    '<div class=\"meta\">' + srcBadge(t.source) +\n    (t.due ? '<span class=\"due ' + dueCls + '\">📅 ' + dueLabel(t.due) + (dueCls === 'over' ? ' 期限切れ' : '') + '<\/span>' : '') +\n    (t.priority === '高' ? '<span>🔥 至急<\/span>' : '') +\n    (t.done && t.doneAt ? '<span>✔ ' + esc(t.doneAt.slice(5, 16).replace('-', '/')) + '<\/span>' : '') +\n    '<\/div>' + (t.memo ? '<div class=\"memo\">' + esc(t.memo) + '<\/div>' : '') + '<\/div><\/li>';\n}\n\nfunction group(cls, title, arr, collapsible) {\n  if (!arr.length) return '';\n  const open = !collapsible || showDone;\n  return '<section class=\"' + cls + '\"><h2' + (collapsible ? ' id=\"toggleDone\"' : '') + '>' +\n    (collapsible ? (open ? '▾ ' : '▸ ') : '') + title + ' <span class=\"n\">' + arr.length + '<\/span><\/h2>' +\n    (open ? '<ul>' + arr.map(item).join('') + '<\/ul>' : '') + '<\/section>';\n}\n\nfunction render() {\n  const today = todayStr();\n  let open = todos.filter(t => !t.done).sort(byDue);\n  const done = todos.filter(t => t.done).sort((a, b) => (b.doneAt || '').localeCompare(a.doneAt || ''));\n  if (filter === 'today') open = open.filter(t => t.due && t.due <= today);\n  if (filter === 'src') open = open.filter(t => t.source && t.source !== '手入力');\n\n  // 進み具合 = 今日が期限（または期限切れ）の未完了 ＋ 今日完了したもの\n  const doneToday = done.filter(t => (t.doneAt || '').startsWith(today));\n  const dueOpen = todos.filter(t => !t.done && t.due && t.due <= today);\n  const all = doneToday.length + dueOpen.length;\n  $('doneN').textContent = doneToday.length;\n  $('allN').textContent = all;\n  $('barFill').style.width = all ? (doneToday.length / all * 100) + '%' : '0';\n\n  const html =\n    group('over', '⚠️ 期限切れ', open.filter(t => t.due && t.due < today)) +\n    group('today', '📌 今日', open.filter(t => t.due === today)) +\n    group('later', '🗓 明日以降', open.filter(t => t.due > today)) +\n    group('nodue', '📝 期限なし', open.filter(t => !t.due)) +\n    group('done', '✅ 完了（直近7日）', done, true);\n  $('list').innerHTML = html || '<div class=\"empty\">🎉 やることはありません<\/div>';\n  paintSelBar();\n}\n\n// ── 読み込み・同期 ──\nasync function refresh(quiet) {\n  if (!quiet) $('syncAt').textContent = '更新中…';\n  try {\n    todos = await call('uiList', false);\n    render();\n    const d = new Date();\n    $('syncAt').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ' 更新';\n  } catch (e) {\n    $('syncAt').textContent = '通信エラー';\n  }\n}\n\nlet toastTimer;\nfunction toast(msg, undo) {\n  $('toastMsg').textContent = msg;\n  $('toastUndo').hidden = !undo;\n  $('toastUndo').onclick = () => { $('toast').classList.remove('show'); undo && undo(); };\n  $('toast').classList.add('show');\n  clearTimeout(toastTimer);\n  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 3500);\n}\n\nasync function setDone(id, done) {\n  const t = todos.find(x => x.id === id);\n  if (!t) return;\n  const li = document.querySelector('li[data-id=\"' + CSS.escape(id) + '\"]');\n  // ① その場で色が変わる → ② 少し待ってから完了欄（下）へ移動\n  t.done = done;\n  t.doneAt = done ? new Date().toLocaleString('sv-SE').slice(0, 19) : '';\n  if (li) {\n    li.classList.toggle('is-done', done);\n    setTimeout(() => li.classList.add('leaving'), 450);\n    setTimeout(render, 750);\n  } else render();\n  if (done) toast('完了にしました 👍', () => setDone(id, false));\n  try {\n    const saved = await call('uiUpdate', id, { done });\n    Object.assign(t, saved);\n  } catch (e) { toast('保存に失敗しました'); refresh(true); }\n}\n\n// ── イベント ──\n$('list').addEventListener('click', e => {\n  if (e.target.closest('#toggleDone')) { showDone = !showDone; render(); return; }\n  const li = e.target.closest('li');\n  if (!li) return;\n  const t = todos.find(x => x.id === li.dataset.id);\n  if (!t) return;\n  if (selecting) {                       // 選択モード：どこを押しても選択の切り替え\n    if (selected.has(t.id)) selected.delete(t.id); else selected.add(t.id);\n    li.classList.toggle('sel', selected.has(t.id));\n    paintSelBar();\n    return;\n  }\n  if (e.target.closest('.check')) setDone(t.id, !t.done);\n  else if (e.target.closest('.body')) openEdit(t);\n});\n\n$('dueChips').addEventListener('click', e => {\n  const c = e.target.closest('.chip');\n  if (!c) return;\n  if (c.id === 'hiChip') { addHi = !addHi; c.classList.toggle('on', addHi); return; }\n  addDue = c.dataset.due;\n  $('dueDate').value = '';\n  document.querySelectorAll('#dueChips .chip[data-due]').forEach(x => x.classList.toggle('on', x === c));\n});\n$('dueDate').addEventListener('change', e => {\n  addDue = e.target.value;\n  document.querySelectorAll('#dueChips .chip[data-due]').forEach(x => x.classList.remove('on'));\n});\n\n$('addForm').addEventListener('submit', async e => {\n  e.preventDefault();\n  const title = $('addTitle').value.trim();\n  if (!title) return;\n  const due = addDue === 'today' ? todayStr() : addDue === 'tomorrow' ? tomorrowStr() : addDue;\n  const temp = { id: 'tmp' + Date.now(), title, memo: '', due, priority: addHi ? '高' : '中', source: '手入力',\n    done: false, doneAt: '', createdAt: new Date().toLocaleString('sv-SE') };\n  todos.push(temp);\n  render();\n  $('addTitle').value = '';\n  try {\n    const saved = await call('uiAdd', { title, due, priority: temp.priority });\n    Object.assign(temp, saved);\n    render();\n  } catch (err) { toast('追加に失敗しました'); todos = todos.filter(x => x !== temp); render(); }\n});\n\n$('tabs').addEventListener('click', e => {\n  const b = e.target.closest('button');\n  if (!b) return;\n  filter = b.dataset.f;\n  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));\n  render();\n});\n\nfunction openEdit(t) {\n  editing = t;\n  $('eTitle').value = t.title;\n  $('eMemo').value = t.memo || '';\n  $('eDue').value = t.due || '';\n  $('ePri').value = t.priority || '中';\n  $('sheetBg').classList.add('show');\n}\nfunction closeEdit() { $('sheetBg').classList.remove('show'); editing = null; }\n$('eCancel').onclick = closeEdit;\n$('sheetBg').addEventListener('click', e => { if (e.target === $('sheetBg')) closeEdit(); });\n$('editForm').addEventListener('submit', async e => {\n  e.preventDefault();\n  const t = editing;\n  const fields = { title: $('eTitle').value.trim(), memo: $('eMemo').value, due: $('eDue').value, priority: $('ePri').value };\n  Object.assign(t, fields);\n  closeEdit();\n  render();\n  try { Object.assign(t, await call('uiUpdate', t.id, fields)); } catch (err) { toast('保存に失敗しました'); refresh(true); }\n});\n$('eDel').onclick = async () => {\n  const t = editing;\n  if (!confirm('「' + t.title + '」を削除しますか？')) return;\n  todos = todos.filter(x => x !== t);\n  closeEdit();\n  render();\n  try { await call('uiDelete', t.id); } catch (err) { toast('削除に失敗しました'); refresh(true); }\n};\n\n// ── 選択して一括操作 ──\nlet delArmed = null;\nfunction disarmDelete() {\n  clearTimeout(delArmed); delArmed = null;\n  $('selDelete').classList.remove('confirm');\n  $('selDelete').textContent = '🗑 削除';\n}\nfunction paintSelBar() {\n  for (const id of [...selected]) if (!todos.some(t => t.id === id)) selected.delete(id);\n  const n = selected.size;\n  $('selCount').textContent = n + '件を選択';\n  $('selComplete').disabled = n === 0;\n  $('selDelete').disabled = n === 0;\n  if (!n) disarmDelete();\n}\nfunction setSelecting(on) {\n  selecting = on;\n  selected.clear();\n  if (on) $('toast').classList.remove('show');\n  disarmDelete();\n  document.body.classList.toggle('selecting', on);\n  $('selToggle').classList.toggle('on', on);\n  $('selToggle').textContent = on ? '終了' : '選択';\n  render();\n}\n$('selToggle').onclick = () => setSelecting(!selecting);\n$('selCancel').onclick = () => setSelecting(false);\n$('selNone').onclick = () => { selected.clear(); render(); };\n$('selAll').onclick = () => {\n  document.querySelectorAll('#list li[data-id]').forEach(li => selected.add(li.dataset.id));\n  render();\n};\n$('selDone').onclick = () => {\n  showDone = true;\n  todos.filter(t => t.done).forEach(t => selected.add(t.id));\n  render();\n};\n$('selComplete').onclick = async () => {\n  const ids = [...selected].filter(id => { const t = todos.find(x => x.id === id); return t && !t.done; });\n  if (!ids.length) { toast('選んだものは、もう完了済みです'); return; }\n  const now = new Date().toLocaleString('sv-SE').slice(0, 19);\n  todos.forEach(t => { if (ids.includes(t.id)) { t.done = true; t.doneAt = now; } });\n  setSelecting(false);\n  toast(ids.length + '件を完了にしました 👍', async () => {\n    todos.forEach(t => { if (ids.includes(t.id)) { t.done = false; t.doneAt = ''; } });\n    render();\n    try { await call('uiSetDoneMany', ids, false); } catch (e) { toast('保存に失敗しました'); refresh(true); }\n  });\n  try { await call('uiSetDoneMany', ids, true); } catch (e) { toast('保存に失敗しました'); refresh(true); }\n};\n$('selDelete').onclick = async () => {\n  const ids = [...selected];\n  if (!ids.length) return;\n  if (!delArmed) {                       // 1回目：確認表示（4秒以内にもう一度押すと削除）\n    $('selDelete').classList.add('confirm');\n    $('selDelete').textContent = 'もう一度で削除';\n    delArmed = setTimeout(disarmDelete, 4000);\n    return;\n  }\n  disarmDelete();\n  const backup = todos.slice();\n  todos = todos.filter(t => !selected.has(t.id));\n  setSelecting(false);\n  try {\n    await call('uiDeleteMany', ids);\n    toast(ids.length + '件を削除しました');\n  } catch (e) { todos = backup; render(); toast('削除に失敗しました'); refresh(true); }\n};\n\n$('sync').onclick = () => refresh();\n// 他の端末での変更を取り込む：画面に戻った時＋1分ごと\ndocument.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });\nsetInterval(() => { if (!document.hidden && !editing && !selecting) refresh(true); }, 60000);\n\n(function init() {\n  const d = new Date();\n  $('today').textContent = d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日（' + WD[d.getDay()] + '）';\n  refresh();\n})();\n<\/script>\n<\/body>\n<\/html>\n", "install.ps1": "& {\n# 工務TODO MCPコネクター インストーラー（Windows PowerShell に貼り付けて Enter）\n# 1) Node.js が無ければ入れる  2) コネクターを %USERPROFILE%\\komu-todo-mcp に置く\n# 3) Claude Desktop の設定に komu-todo を追加  4) TODO につながるか確認\n$ErrorActionPreference = 'Stop'\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\n$url = '__TODO_API_URL__'\n$key = '__TODO_API_KEY__'\nif ($url -like '__*') { $url = Read-Host 'ウェブアプリのURL（…/exec）を貼り付けて Enter' }\nif ($key -like '__*') { $key = Read-Host '合言葉（API_KEY）を貼り付けて Enter' }\n$url = ($url.Trim() -replace '\\?.*$', '')\n$key = $key.Trim()\nif ($url -notmatch '^https://script\\.google\\.com/.+/exec$') { throw \"URL が …/exec で終わっていません: $url\" }\n\nWrite-Host \"`n[1/4] Node.js を確認しています…\" -ForegroundColor Cyan\nif (-not (Get-Command node -ErrorAction SilentlyContinue)) {\n  Write-Host '  Node.js をインストールします（「このアプリがデバイスに変更を加えることを許可しますか」→ はい）'\n  winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements\n  $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')\n  if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js が見つかりません。https://nodejs.org/ja から LTS 版を入れてから、もう一度貼り付けてください。' }\n}\n$node = (Get-Command node).Source\nWrite-Host \"  OK: $node ($(& $node -v))\"\n\nWrite-Host \"`n[2/4] コネクターをダウンロードしています…\" -ForegroundColor Cyan\n$dir = Join-Path $env:USERPROFILE 'komu-todo-mcp'\nNew-Item -ItemType Directory -Force -Path $dir | Out-Null\n$base = 'https://raw.githubusercontent.com/ak05080707/rakugaki-app/claude/practical-bohr-07lnjy/todo/mcp-server'\nforeach ($f in 'index.mjs', 'timetree.mjs', 'configure.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {\n  Invoke-WebRequest -UseBasicParsing -Uri \"$base/$f\" -OutFile (Join-Path $dir $f)\n}\nPush-Location $dir\ntry { & npm.cmd install --omit=dev --no-audit --no-fund | Out-Host } finally { Pop-Location }\nif ($LASTEXITCODE -ne 0) { throw 'npm install に失敗しました' }\nWrite-Host \"  OK: $dir\"\n\nWrite-Host \"`n[3/4] Claude Desktop の設定に追加しています…\" -ForegroundColor Cyan\n# JSON の書き込みは Node.js で行う（Windows PowerShell 5.1 の ConvertTo-Json は配列を崩すことがあるため）\n[Console]::OutputEncoding = [Text.Encoding]::UTF8\n$env:TODO_API_URL = $url\n$env:TODO_API_KEY = $key\n& $node (Join-Path $dir 'configure.mjs') | Out-Host\nif ($LASTEXITCODE -ne 0) { throw 'Claude Desktop の設定に失敗しました' }\n\nWrite-Host \"`n[4/4] TODO につながるか確認しています…\" -ForegroundColor Cyan\n# Claude と同じ仕組み（Node.js）で実際に TODO を読んでみる\n$env:KOMU_MCP_INDEX = 'file:///' + ((Join-Path $dir 'index.mjs') -replace '\\\\', '/')\n$js = \"import(process.env.KOMU_MCP_INDEX).then(m => m.gas('list')).then(r => console.log('OK ' + r.length), e => console.log('NG ' + e.message))\"\n$out = (& $node -e $js | Out-String).Trim()\nif ($out -like 'OK *') {\n  Write-Host \"  OK: TODO $($out.Substring(3)) 件を読み込めました\"\n} else {\n  Write-Host \"  TODO への接続確認がうまくいきませんでした。設定は書き込み済みです。\" -ForegroundColor Yellow\n  Write-Host \"  下の内容をスクショして Claude に見せてください：\" -ForegroundColor Yellow\n  Write-Host \"  URL: $url\"\n  Write-Host \"  $out\"\n}\n\nWrite-Host \"`n完了しました。Claude Desktop を一度終了して、起動し直してください。\" -ForegroundColor Green\nWrite-Host '（右下のタスクトレイの Claude アイコンを右クリック →「終了」→ もう一度起動）'\n}\n", "setup-timetree.ps1": "& {\n# TimeTree 読み取りの設定（Windows PowerShell に貼り付けて Enter）\n# 先に Claude を終了しておくこと。コネクターを最新版にして、TimeTree のログイン情報を Claude Desktop の設定に追加する。\n$ErrorActionPreference = 'Stop'\n[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12\n[Console]::OutputEncoding = [Text.Encoding]::UTF8\n$dir = Join-Path $env:USERPROFILE 'komu-todo-mcp'\nif (-not (Test-Path (Join-Path $dir 'index.mjs'))) { throw '先に「E. 会社PCの Claude」のインストールを済ませてください' }\n$node = (Get-Command node).Source\n\nWrite-Host \"`n[1/3] コネクターを最新版にしています…\" -ForegroundColor Cyan\n$base = 'https://raw.githubusercontent.com/ak05080707/rakugaki-app/claude/practical-bohr-07lnjy/todo/mcp-server'\nforeach ($f in 'index.mjs', 'timetree.mjs', 'configure.mjs', 'outlook.ps1', 'package.json', 'package-lock.json') {\n  Invoke-WebRequest -UseBasicParsing -Uri \"$base/$f\" -OutFile (Join-Path $dir $f)\n}\nPush-Location $dir\ntry { & npm.cmd install --omit=dev --no-audit --no-fund | Out-Host } finally { Pop-Location }\nif ($LASTEXITCODE -ne 0) { throw 'npm install に失敗しました' }\n\nWrite-Host \"`n[2/3] TimeTree のログイン情報を入力してください\" -ForegroundColor Cyan\n$email = (Read-Host '  TimeTree のメールアドレス').Trim()\n$sec = Read-Host '  TimeTree のパスワード（入力しても画面には出ません）' -AsSecureString\n$bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)\ntry { $pw = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }\n$env:TIMETREE_EMAIL = $email\n$env:TIMETREE_PASSWORD = $pw\n\nWrite-Host \"`n[3/3] TimeTree にログインできるか確認しています…\" -ForegroundColor Cyan\n$env:KOMU_TT = 'file:///' + ((Join-Path $dir 'timetree.mjs') -replace '\\\\', '/')\n$js = \"import(process.env.KOMU_TT).then(m => m.listCalendars()).then(c => console.log('OK ' + c.map(x => x.name).join(' / ')), e => console.log('NG ' + e.message))\"\n$out = (& $node -e $js | Out-String).Trim()\nif ($out -notlike 'OK *') {\n  Write-Host \"  $out\" -ForegroundColor Yellow\n  Write-Host '  ログインできなかったので、設定は保存していません。もう一度貼り付けてやり直してください。' -ForegroundColor Yellow\n  return\n}\nWrite-Host \"  OK: カレンダー → $($out.Substring(3))\"\n& $node (Join-Path $dir 'configure.mjs') | Out-Host\nif ($LASTEXITCODE -ne 0) { throw 'Claude Desktop の設定に失敗しました' }\nWrite-Host \"`n完了しました。Claude を起動してください。\" -ForegroundColor Green\n}\n"}</script>
+<script>
+const FILES = JSON.parse(document.getElementById('files').textContent);
+const TOTAL = document.querySelectorAll('.step[data-step]').length;
+
+function flash(btn, msg) {
+  const s = btn.parentElement.querySelector('.copied');
+  if (s) { s.textContent = msg; setTimeout(() => { s.textContent = ''; }, 2500); }
+}
+async function copyText(text, btn, pre) {
+  try { await navigator.clipboard.writeText(text); flash(btn, 'コピーしました。貼り付けてください'); }
+  catch (e) {
+    // クリップボードが使えない環境：中身を開いて選択状態にする
+    if (pre) {
+      pre.closest('details').open = true;
+      const r = document.createRange(); r.selectNodeContents(pre);
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      flash(btn, '選択しました。Ctrl+C でコピーしてください');
+    } else flash(btn, '手で選択してコピーしてください');
+  }
+}
+document.querySelectorAll('pre[data-show]').forEach(p => { p.textContent = FILES[p.dataset.show]; });
+document.querySelectorAll('[data-copy-text]').forEach(b => {
+  b.addEventListener('click', () => copyText(b.dataset.copyText, b));
+});
+document.querySelectorAll('[data-copy]').forEach(b => {
+  b.addEventListener('click', () => copyText(FILES[b.dataset.copy], b, b.closest('.body').querySelector('pre')));
+});
+
+// 進捗（このブラウザだけに保存）
+let done = {};
+try { done = JSON.parse(localStorage.getItem('komu-setup-v2') || '{}'); } catch (e) {}
+function paint() {
+  let n = 0;
+  document.querySelectorAll('.step[data-step]').forEach(s => {
+    const on = !!done[s.dataset.step]; s.classList.toggle('is-done', on); if (on) n++;
+  });
+  document.getElementById('meterFill').style.width = (n / TOTAL * 100) + '%';
+  document.getElementById('meterText').textContent = n + ' / ' + TOTAL;
+}
+document.querySelectorAll('.step[data-step] .no').forEach(b => b.addEventListener('click', () => {
+  const k = b.closest('.step').dataset.step; done[k] = !done[k];
+  try { localStorage.setItem('komu-setup-v2', JSON.stringify(done)); } catch (e) {}
+  paint();
+}));
+paint();
+
+// URL組み立て＋QR
+const execUrl = document.getElementById('execUrl'), apiKey = document.getElementById('apiKey');
+const fullUrl = document.getElementById('fullUrl'), qrBox = document.getElementById('qr');
+let current = '';
+function build() {
+  const u = execUrl.value.trim().replace(/\?.*$/, ''), k = apiKey.value.trim();
+  qrBox.innerHTML = '';
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(u) || !k) {
+    current = '';
+    fullUrl.textContent = u && !/\/exec$/.test(u) ? 'URLは …/exec で終わるものを入れてください' : '（上の2つを入れると、ここに完成したURLが出ます）';
+    return;
+  }
+  current = u + '?key=' + encodeURIComponent(k);
+  fullUrl.textContent = current;
+  if (window.QRCode) new QRCode(qrBox, { text: current, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+}
+execUrl.addEventListener('input', build); apiKey.addEventListener('input', build);
+document.getElementById('copyUrl').addEventListener('click', e => {
+  if (current) copyText(current, e.currentTarget); else flash(e.currentTarget, '先に上の2つを入れてください');
+});
+// インストール用コマンド（手順7の URL・合言葉を埋め込む）
+function installScript() {
+  const q = s => s.replace(/'/g, "''");
+  const u = execUrl.value.trim().replace(/\?.*$/, ''), k = apiKey.value.trim();
+  let s = FILES['install.ps1'];
+  if (u) s = s.replace("'__TODO_API_URL__'", "'" + q(u) + "'");
+  if (k) s = s.replace("'__TODO_API_KEY__'", "'" + q(k) + "'");
+  return s;
+}
+function paintInstall() {
+  const ok = execUrl.value.trim() && apiKey.value.trim();
+  document.getElementById('installState').textContent = ok
+    ? '手順7のURLと合言葉を埋め込み済みです。'
+    : '手順7が空なので、実行中にURLと合言葉を聞かれます（貼り付けて Enter）。';
+  document.getElementById('installShow').textContent = FILES['install.ps1'];
+}
+execUrl.addEventListener('input', paintInstall); apiKey.addEventListener('input', paintInstall);
+paintInstall();
+document.getElementById('copyInstall').addEventListener('click', e => copyText(installScript(), e.currentTarget));
+</script>
+
+</body>
+</html>
