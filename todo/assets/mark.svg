@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#E9E4DA"/>
+  <!-- 手帳（ゴムバンドと、しおり） -->
+  <rect x="128" y="84" width="264" height="344" rx="22" fill="#2B2F38"/>
+  <rect x="128" y="84" width="34" height="344" rx="10" fill="#1C1F26"/>
+  <rect x="330" y="84" width="20" height="344" fill="#C99B63"/>
+  <path d="M220 420 V478 L244 458 L268 478 V420 Z" fill="#2EA85A"/>
+  <path d="M196 252 L238 292 L300 220" fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
