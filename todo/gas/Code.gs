@@ -17,6 +17,8 @@ const SHEET_LINE = 'LINE_LOG';
 const HEADERS = ['id', 'title', 'memo', 'due', 'priority', 'source', 'ref',
   'done', 'doneAt', 'createdAt', 'updatedAt'];
 const TZ = 'Asia/Tokyo';
+// ブラウザのタブに出るマーク（手帳）
+const FAVICON_URL = 'https://raw.githubusercontent.com/ak05080707/rakugaki-app/claude/practical-bohr-07lnjy/todo/assets/favicon-64.png';
 
 // ───────────────────────── 初期設定 ─────────────────────────
 
@@ -59,6 +61,7 @@ function doGet(e) {
     .setTitle('工務TODO')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .addMetaTag('apple-mobile-web-app-capable', 'yes')
+    .setFaviconUrl(FAVICON_URL)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

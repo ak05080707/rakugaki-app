@@ -36,6 +36,11 @@ html, body { margin: 0; background: var(--bg); color: var(--text);
 .wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 120px; padding-top: max(16px, env(safe-area-inset-top)); }
 
 header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+header .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+header .mark { width: 40px; height: 40px; flex: none; }
+header h1, header .date, .sync, .sel-toggle { white-space: nowrap; }
+header .head-btns { flex: none; }
+@media (max-width: 400px) { header h1 { font-size: 21px; } .sync { padding: 6px 4px; } }
 header h1 { font-size: 24px; margin: 0; letter-spacing: .02em; }
 header .date { color: var(--muted); font-size: 14px; }
 .sync { border: 0; background: none; color: var(--muted); font-size: 13px; padding: 6px 8px; cursor: pointer; border-radius: 8px; }
@@ -144,9 +149,12 @@ body.selecting .toast.show { transform: translateX(-50%) translateY(-110px); }
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <div class="date" id="today"></div>
-      <h1>今日のTODO</h1>
+    <div class="brand">
+      <svg class="mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true"> <rect width="512" height="512" rx="112" fill="#E9E4DA"/> <rect x="128" y="84" width="264" height="344" rx="22" fill="#2B2F38"/> <rect x="128" y="84" width="34" height="344" rx="10" fill="#1C1F26"/> <rect x="330" y="84" width="20" height="344" fill="#C99B63"/> <path d="M220 420 V478 L244 458 L268 478 V420 Z" fill="#2EA85A"/> <path d="M196 252 L238 292 L300 220" fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/> </svg>
+      <div>
+        <div class="date" id="today"></div>
+        <h1>今日のTODO</h1>
+      </div>
     </div>
     <div class="head-btns">
       <button class="sync" id="sync" title="最新に更新">⟳ <span id="syncAt">読込中…</span></button>
