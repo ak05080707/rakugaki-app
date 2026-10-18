@@ -162,6 +162,9 @@ pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height:
           <div class="copy"><button class="btn sub" id="copyUrl">URLをコピー</button><span class="copied" aria-live="polite"></span></div></div>
         <div id="qr" aria-label="iPhone読み取り用QRコード"></div>
       </div>
+      <div class="field" style="margin-top:12px"><label>LINE（Webhook）用のURL　※手順9で使います</label>
+        <div class="url"><code id="oldUrl">（上の2つを入れると、ここに出ます）</code>
+          <div class="copy"><button class="btn sub" id="copyLine">LINE用URLをコピー</button><span class="copied" aria-live="polite"></span></div></div></div>
       <div class="note">入れた内容はこのページの外には送られず、保存もされません。このURLは人に教えないでください。</div>
     </div></div>
 
@@ -169,8 +172,8 @@ pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height:
     <h3>iPhone・iPad のホーム画面に置く</h3>
     <div class="body"><ol>
       <li>iPhoneのカメラで上のQRコードを読む → <b>Safari</b> で開く</li>
-      <li>下の共有ボタン（四角から↑）→ <span class="ui">ホーム画面に追加</span> → 名前を「工務TODO」→ <span class="ui">追加</span></li>
-      <li>iPadも同じ。上に「Google Apps Script のユーザーが作成したもの」という帯が出るのは正常です</li>
+      <li>下の共有ボタン（四角から↑）→ <span class="ui">ホーム画面に追加</span> → 手帳アイコンと「工務TODO」の名前が入っているので <span class="ui">追加</span></li>
+      <li>iPadも同じ。画面は GitHub Pages から表示されるので、Google の注意の帯は出ません（手順24で GitHub Pages をオンにしておくこと）</li>
     </ol></div></div>
 
   <div class="step" data-step="9"><button class="no" aria-label="手順9を完了にする">9</button>
@@ -198,7 +201,7 @@ pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height:
       <li><a href="https://manager.line.biz/" target="_blank" rel="noopener">LINE Official Account Manager</a> で「工務TODO」を開く</li>
       <li>右上の <span class="ui">設定</span> → 左の <span class="ui">Messaging API</span> → <span class="ui">Messaging APIを利用する</span></li>
       <li>プロバイダーを聞かれたら「新規作成」で名前は自分の名前など何でもOK → <span class="ui">OK</span></li>
-      <li>同じ画面の <b>Webhook URL</b> に、手順7で作った <b>自分専用URL（…/exec?key=合言葉）</b> を貼り付けて <span class="ui">保存</span></li>
+      <li>同じ画面の <b>Webhook URL</b> に、手順7の <b>LINE用URL（…/exec?key=合言葉）</b> を貼り付けて <span class="ui">保存</span></li>
     </ol></div></div>
 
   <div class="step" data-step="12"><button class="no" aria-label="手順12を完了にする">12</button>
@@ -324,7 +327,50 @@ pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height:
     </ol></div></div>
 
 
-  <h2 class="part">G. 毎日の使い方</h2>
+  <h2 class="part">G. 画面の引っ越し（注意の帯を消す・ホーム画面に手帳アイコン）</h2>
+  <p class="lead">TODO画面を GitHub Pages に置き、上に出る「このアプリケーションは Google Apps Script のユーザーによって…」の帯を消します。データ・LINE・Claude の設定はそのまま。Code.gs の変更もいりません。</p>
+
+  <div class="step" data-step="24"><button class="no" aria-label="手順24を完了にする">24</button>
+    <h3>GitHub Pages をオンにする</h3>
+    <div class="body"><ol>
+      <li><a href="https://github.com/ak05080707/rakugaki-app/settings/pages" target="_blank" rel="noopener">GitHub のリポジトリ設定（Pages）</a>を開く</li>
+      <li><span class="ui">Source</span> を <b>Deploy from a branch</b>、<span class="ui">Branch</span> を <code>claude/practical-bohr-07lnjy</code> と <code>/ (root)</code> にして <span class="ui">Save</span></li>
+      <li>1〜2分待って <a href="https://ak05080707.github.io/rakugaki-app/todo/app/" target="_blank" rel="noopener">https://ak05080707.github.io/rakugaki-app/todo/app/</a> を開き、「工務TODO の接続先」画面が出ればOK</li>
+    </ol>
+    <div class="note">公開されるのは画面のプログラムだけです。URLと合言葉は各端末の中にだけ保存されるので、TODOの中身は他の人には見えません。</div></div></div>
+
+  <div class="step" data-step="25"><button class="no" aria-label="手順25を完了にする">25</button>
+    <h3>新しいURLを作る</h3>
+    <div class="body"><ol>
+      <li>手順7の欄に、ウェブアプリのURL（…/exec）と合言葉を入れる</li>
+      <li>新しい画面のURL（<code>…github.io/rakugaki-app/todo/app/#api=…</code>）とQRコードが出ます</li>
+    </ol></div></div>
+
+  <div class="step" data-step="26"><button class="no" aria-label="手順26を完了にする">26</button>
+    <h3>iPhone・iPad のホーム画面に入れ直す</h3>
+    <div class="body"><ol>
+      <li>iPhoneのカメラでQRを読む → <b>Safari</b> で開く</li>
+      <li>共有ボタン（□↑）→ <span class="ui">ホーム画面に追加</span>。手帳アイコンと「工務TODO」の名前が最初から入っています</li>
+      <li>前のTODOアイコン（ショートカット版も）は長押し → <span class="ui">Appを削除</span></li>
+    </ol></div></div>
+
+  <div class="step" data-step="27"><button class="no" aria-label="手順27を完了にする">27</button>
+    <h3>Windows PC に入れ直す</h3>
+    <div class="body"><ol>
+      <li>Edge で新しいURLを開く（手順25の <span class="ui">URLをコピー</span> を使う）</li>
+      <li><span class="ui">…</span> → <span class="ui">アプリ</span> → <span class="ui">このサイトをアプリとしてインストール</span></li>
+    </ol></div></div>
+
+  <div class="step" data-step="28"><button class="no" aria-label="手順28を完了にする">28</button>
+    <h3>動作を確認する</h3>
+    <div class="body"><ol>
+      <li>上に Google の帯が出ていないこと</li>
+      <li>TODOの追加・完了・選択して削除・絞り込みができること</li>
+      <li>LINEで「明日 テスト」と送り、新しい画面に出ること（右上の ⟳ で更新）</li>
+    </ol>
+    <div class="note">前の画面（Google 側のURL）も残っています。困った時はいつでも戻せます。</div></div></div>
+
+  <h2 class="part">H. 毎日の使い方</h2>
   <div class="step"><span></span><div class="body">
     <h3>TODO画面</h3>
     <ul>
@@ -355,9 +401,10 @@ pre { background: var(--code-bg); border-radius: 8px; padding: 10px; max-height:
     </ul>
   </div></div>
 
-  <h2 class="part">H. コードを更新するとき（大事）</h2>
+  <h2 class="part">I. コードを更新するとき（大事）</h2>
   <div class="step"><span></span><div class="body">
     <ol>
+      <li><b>新しい画面（GitHub Pages）を使っている場合、画面の変更は自動で反映されます。</b>下の作業は、データ側（Code.gs）を変える時と、前の画面を使っている時だけです</li>
       <li>Apps Script で Code.gs・Index.html を貼り替えて <kbd>Ctrl</kbd>+<kbd>S</kbd>（このページの手順3・4のボタンが常に最新版です）</li>
       <li><span class="ui">デプロイ</span> → <span class="ui">デプロイを管理</span> → 今使っているデプロイの <span class="ui">✏ 鉛筆</span> → バージョン <b>新バージョン</b> → <span class="ui">デプロイ</span></li>
       <li>スマホは TODO アプリを完全に閉じて開き直す。PC は <kbd>Ctrl</kbd>+<kbd>F5</kbd></li>
@@ -431,22 +478,28 @@ paint();
 // URL組み立て＋QR
 const execUrl = document.getElementById('execUrl'), apiKey = document.getElementById('apiKey');
 const fullUrl = document.getElementById('fullUrl'), qrBox = document.getElementById('qr');
-let current = '';
+let current = '', lineUrl = '';
 function build() {
   const u = execUrl.value.trim().replace(/\?.*$/, ''), k = apiKey.value.trim();
   qrBox.innerHTML = '';
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(u) || !k) {
-    current = '';
+    current = ''; lineUrl = '';
+    document.getElementById('oldUrl').textContent = '（上の2つを入れると、ここに出ます）';
     fullUrl.textContent = u && !/\/exec$/.test(u) ? 'URLは …/exec で終わるものを入れてください' : '（上の2つを入れると、ここに完成したURLが出ます）';
     return;
   }
-  current = u + '?key=' + encodeURIComponent(k);
+  current = 'https://ak05080707.github.io/rakugaki-app/todo/app/#api=' + encodeURIComponent(u) + '&key=' + encodeURIComponent(k);
   fullUrl.textContent = current;
-  if (window.QRCode) new QRCode(qrBox, { text: current, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+  lineUrl = u + '?key=' + encodeURIComponent(k);
+  document.getElementById('oldUrl').textContent = lineUrl;
+  if (window.QRCode) new QRCode(qrBox, { text: current, width: 170, height: 170, correctLevel: QRCode.CorrectLevel.L });
 }
 execUrl.addEventListener('input', build); apiKey.addEventListener('input', build);
 document.getElementById('copyUrl').addEventListener('click', e => {
   if (current) copyText(current, e.currentTarget); else flash(e.currentTarget, '先に上の2つを入れてください');
+});
+document.getElementById('copyLine').addEventListener('click', e => {
+  if (lineUrl) copyText(lineUrl, e.currentTarget); else flash(e.currentTarget, '先に上の2つを入れてください');
 });
 // インストール用コマンド（手順7の URL・合言葉を埋め込む）
 function installScript() {
