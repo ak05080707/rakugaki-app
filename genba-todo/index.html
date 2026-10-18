@@ -344,6 +344,7 @@ async function call(fn, ...args) {
 }
 function showSetup() {
   $('#loading').hidden = true;
+  $('#who').textContent = '';
   $('#setupPanel').hidden = false;
   $('#setApi').value = CONF.api; $('#setKey').value = CONF.key;
 }
