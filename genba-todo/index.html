@@ -379,6 +379,10 @@ function showSetup() {
   $('#who').textContent = '';
   $('#setupPanel').hidden = false;
   $('#setApi').value = CONF.api; $('#setKey').value = CONF.key;
+  // ホーム画面のアイコンから開いたのに接続先がない（前の版で作ったアイコンなど）
+  if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+    $('#setMsg').textContent = 'このアイコンには接続先が入っていません。アイコンを長押しして削除し、管理者から届いたURLを Safari（Androidは Chrome）で開いてから、もう一度「ホーム画面に追加」をしてください。';
+  }
 }
 $('#setGo').addEventListener('click', () => {
   const api = $('#setApi').value.trim(), key = $('#setKey').value.trim();

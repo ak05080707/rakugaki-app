@@ -1,8 +1,7 @@
 {
   "name": "現場TODO共有",
   "short_name": "現場TODO",
-  "start_url": "./",
-  "scope": "./",
+  "lang": "ja",
   "display": "standalone",
   "background_color": "#f2f3ef",
   "theme_color": "#e3a008",
