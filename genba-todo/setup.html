@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>現場TODO 招待URLづくり</title>
+<link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+/* 管理者用の1枚もの：上に入力、下に完成したURLとQRコード */
+:root{
+  --bg:#f2f3ef; --surface:#ffffff; --ink:#1c2220; --muted:#5d6864; --line:#d8dcd6;
+  --accent:#e3a008; --accent-ink:#1c1a10; --no:#c13d28; --ok:#1d7a4c; --ok-bg:#e3f2ea;
+  --font:"BIZ UDPGothic","Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141917; --surface:#1d2321; --ink:#e7ebe8; --muted:#9aa49f; --line:#323d39;
+  --accent:#f0b429; --no:#f07a62; --ok:#56c792; --ok-bg:#173227; color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.7}
+.wrap{max-width:720px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:18px}
+header{display:flex;align-items:center;gap:12px}
+header img{width:40px;height:40px;border-radius:10px}
+h1{font-size:22px;margin:0}
+h2{font-size:16px;margin:0}
+.lead{color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px}
+.step{display:flex;gap:12px;align-items:flex-start}
+.num{flex:none;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+label{font-size:13px;font-weight:700}
+.hint{font-size:13px;color:var(--muted)}
+code{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px}
+input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:11px 12px;width:100%;font-size:16px}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.msg{font-size:13px;color:var(--no);min-height:1em}
+.result{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+.qr{background:#fff;padding:12px;border-radius:8px;border:1px solid var(--line);line-height:0}
+.qr img,.qr canvas{width:200px;height:200px}
+.out{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.url{font-family:ui-monospace,Consolas,monospace;font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;overflow-wrap:anywhere;user-select:all}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+button,.btn{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:10px 16px;text-decoration:none;display:inline-flex;align-items:center}
+.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.okbox{background:var(--ok-bg);color:var(--ok);border-radius:8px;padding:10px 14px;font-weight:700}
+.note{font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icons/icon-192.png" alt="">
+    <h1>現場TODO　招待URLづくり</h1>
+  </header>
+  <p class="lead">管理者用のページです。2つを入れると、みんなに配るURLとQRコードができます。入れた内容は、このページの外には送られず、保存もされません。</p>
+
+  <div class="panel">
+    <div class="step">
+      <span class="num">1</span>
+      <div class="field">
+        <label for="api">ウェブアプリのURL</label>
+        <input id="api" type="url" placeholder="https://script.google.com/macros/s/……/exec" autocomplete="off" spellcheck="false">
+        <span class="hint">Apps Script の「デプロイ」→「デプロイを管理」の「ウェブアプリ」の下にあるURL（<code>/exec</code> で終わるもの）</span>
+      </div>
+    </div>
+    <div class="step">
+      <span class="num">2</span>
+      <div class="field">
+        <label for="key">合言葉</label>
+        <input id="key" type="text" placeholder="例：abcd234xyz" autocomplete="off" spellcheck="false">
+        <span class="hint">Apps Script で「setup」か「showUrl」を実行すると、実行ログに「合言葉：」として出ます</span>
+      </div>
+    </div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="panel" id="resultPanel" hidden>
+    <h2>みんなに配るURL</h2>
+    <div class="result">
+      <div class="qr" id="qr" aria-label="招待用のQRコード"></div>
+      <div class="out">
+        <div class="url" id="url"></div>
+        <div class="actions">
+          <a class="btn primary" id="line" href="#" target="_blank" rel="noopener">LINEで送る</a>
+          <button type="button" id="copy">URLをコピー</button>
+          <a class="btn" id="open" href="#" target="_blank" rel="noopener">開いてみる</a>
+        </div>
+        <div class="okbox" id="copied" hidden>コピーしました</div>
+      </div>
+    </div>
+    <div class="note">
+      その場にいる人には、携帯のカメラでQRコードを読んでもらいます。離れている人には「LINEで送る」で送ります。<br>
+      URLには合言葉が入っています。社外の人には送らないでください。
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const page = location.href.replace(/setup\.html.*$/, '').replace(/#.*$/, '');
+let qr = null;
+
+function update() {
+  const api = $('#api').value.trim(), key = $('#key').value.trim();
+  $('#msg').textContent = '';
+  if (!api || !key) { $('#resultPanel').hidden = true; return; }
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(api)) {
+    $('#msg').textContent = 'URLは https://script.google.com/ で始まり、/exec で終わるものを入れてください。';
+    $('#resultPanel').hidden = true; return;
+  }
+  const url = page + '#api=' + encodeURIComponent(api) + '&key=' + encodeURIComponent(key);
+  $('#url').textContent = url;
+  $('#open').href = url;
+  const text = '【現場TODO共有】下のURLを開いて、自分の名前を選んでください。携帯では、開いたあと「ホーム画面に追加」をしてください。\n' + url;
+  $('#line').href = 'https://line.me/R/share?text=' + encodeURIComponent(text);
+  $('#qr').replaceChildren();
+  try { qr = new QRCode($('#qr'), { text: url, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.M }); $('#qr').hidden = false; }
+  catch (e) { $('#qr').hidden = true; }
+  $('#copied').hidden = true;
+  $('#resultPanel').hidden = false;
+}
+$('#api').addEventListener('input', update);
+$('#key').addEventListener('input', update);
+$('#copy').addEventListener('click', () => {
+  const url = $('#url').textContent;
+  const ok = () => { $('#copied').hidden = false; };
+  const fallback = () => {
+    const r = document.createRange(); r.selectNodeContents($('#url'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    $('#copied').textContent = '選びました。Ctrl + C（携帯は長押し）でコピーしてください'; $('#copied').hidden = false;
+  };
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(ok).catch(fallback); else fallback();
+});
+</script>
+</body>
+</html>

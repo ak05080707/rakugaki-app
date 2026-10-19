@@ -83,6 +83,7 @@ function showUrl() {
     return;
   }
   Logger.log('合言葉：' + key);
+  Logger.log('招待URLづくりのページ（URLと合言葉を入れるとQRコードができる）：' + PAGES_URL + 'setup.html');
   if (!/\/exec$/.test(api)) {
     Logger.log('（注意）ここで分かったURLが /exec で終わっていません：' + api);
     Logger.log('デプロイの画面に出る「ウェブアプリのURL」（/exec で終わるもの）と、上の合言葉を、新しい画面の「接続の設定」に入れてください：' + PAGES_URL);

@@ -14,6 +14,7 @@
 <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap">
@@ -151,6 +152,13 @@ button:disabled{opacity:.5;cursor:default}
   .foot{flex-direction:column}
   .foot button,.foot .confirm button{width:100%}
 }
+.share{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.qr{background:#fff;padding:10px;border-radius:8px;border:1px solid var(--line);line-height:0}
+.qr img,.qr canvas{width:180px;height:180px}
+.btnlink{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:6px;padding:10px 18px}
+#shareUrl{font-size:12px;color:var(--muted)}
+.a2hs{border-color:var(--accent);background:var(--wait-bg)}
+.a2hs b{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -186,6 +194,12 @@ button:disabled{opacity:.5;cursor:default}
       </div>
       <span class="notice" id="pickMsg"></span>
     </div>
+  </div>
+
+  <div class="panel a2hs" id="a2hsPanel" hidden>
+    <h2 id="a2hsTitle">ホーム画面に追加しましょう</h2>
+    <span id="a2hsText"></span>
+    <div class="actions"><button type="button" id="a2hsClose">閉じる</button></div>
   </div>
 
   <div id="main" hidden>
@@ -259,6 +273,24 @@ button:disabled{opacity:.5;cursor:default}
         <div class="actions">
           <button type="button" id="sndTest">音を試す</button>
           <span class="who">この設定は、この携帯・パソコンだけに保存されます。音が鳴るのは、この画面を開いている間だけです。</span>
+        </div>
+      </details>
+
+      <details class="panel" id="sharePanel" hidden>
+        <summary>みんなを招待する（QRコード・LINE）</summary>
+        <span class="who">このURLを開いた人は、自分の名前を選ぶだけで使えます。URLには合言葉が入っているので、社外には送らないでください。</span>
+        <div class="share">
+          <div id="shareQr" class="qr" aria-label="招待用のQRコード"></div>
+          <div class="field" style="flex:1 1 220px">
+            <span class="l">その場にいる人は</span>
+            <span>携帯のカメラで、左のQRコードを読んでもらいます。</span>
+            <span class="l" style="margin-top:8px">離れている人は</span>
+            <div class="actions">
+              <a class="btnlink primary" id="shareLine" href="#" target="_blank" rel="noopener">LINEで送る</a>
+              <button type="button" id="shareCopy">URLをコピー</button>
+            </div>
+            <input type="text" id="shareUrl" readonly aria-label="招待用のURL">
+          </div>
         </div>
       </details>
 
@@ -725,6 +757,56 @@ $('#addForm').addEventListener('submit', e => {
 // 音を鳴らす設定のときは、ほかの画面を見ている間も新着を調べる
 setInterval(() => { if ((!document.hidden || snd.on) && data && data.me && !pending) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && data && data.me) load(); });
+
+// 招待用のURL（このページのURL＋接続先＋合言葉）
+function shareUrl() {
+  return location.origin + location.pathname + '#api=' + encodeURIComponent(CONF.api) + '&key=' + encodeURIComponent(CONF.key);
+}
+let shareDone = false;
+function renderShare(d) {
+  const show = !!(d && d.me && d.me.role === '上司' && CONF.api && CONF.key);
+  $('#sharePanel').hidden = !show;
+  if (!show || shareDone) return;
+  shareDone = true;
+  const url = shareUrl();
+  $('#shareUrl').value = url;
+  const msg = '【現場TODO共有】下のURLを開いて、自分の名前を選んでください。携帯では、開いたあと「ホーム画面に追加」をしてください。\n' + url;
+  $('#shareLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(msg);
+  try { new QRCode($('#shareQr'), { text: url, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }); }
+  catch (e) { $('#shareQr').hidden = true; }
+}
+$('#shareCopy').addEventListener('click', () => {
+  const url = $('#shareUrl').value;
+  const done = () => toast('URLをコピーしました');
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(done).catch(() => { $('#shareUrl').select(); toast('URLを選びました。長押し（右クリック）でコピーしてください'); });
+  else { $('#shareUrl').select(); toast('URLを選びました。長押し（右クリック）でコピーしてください'); }
+});
+// 初めて使う人への案内：ホーム画面に追加（機種ごとに説明を変える）
+function renderA2hs(d) {
+  const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  let seen = false; try { seen = localStorage.getItem('genba-a2hs') === '1'; } catch (e) {}
+  if (!d || !d.me || standalone || seen) { $('#a2hsPanel').hidden = true; return; }
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  const android = /Android/.test(ua);
+  const inLine = / Line\//i.test(ua);
+  let text;
+  if (inLine) {
+    $('#a2hsTitle').textContent = 'ブラウザで開き直してください';
+    text = 'LINEの中で開いています。右上の「︙」（または下の「…」）から「' + (ios ? 'Safariで開く' : 'ブラウザで開く') + '」を押して、開き直してください。そのあと「ホーム画面に追加」ができます。';
+  } else if (ios) {
+    text = '画面の下の<b>共有ボタン（□に↑）</b>を押して、<b>「ホーム画面に追加」</b>→<b>「追加」</b>を押してください。次からは、ヘルメットのアイコンで開けます。';
+  } else if (android) {
+    text = '右上の<b>「︙」</b>を押して、<b>「ホーム画面に追加」</b>（または「アプリをインストール」）→<b>「追加」</b>を押してください。次からは、ヘルメットのアイコンで開けます。';
+  } else {
+    text = 'アドレス欄の右にある<b>インストールのマーク</b>（または「︙」→「キャスト、保存、共有」→「インストール」）を押すと、デスクトップから開けるようになります。';
+  }
+  $('#a2hsText').innerHTML = text;
+  $('#a2hsPanel').hidden = false;
+}
+$('#a2hsClose').addEventListener('click', () => { try { localStorage.setItem('genba-a2hs', '1'); } catch (e) {} $('#a2hsPanel').hidden = true; });
+const applyBase = apply;
+apply = function (d) { applyBase(d); renderShare(d); renderA2hs(d); };
 
 if (CONF.api && CONF.key) load(); else showSetup();
 </script>
