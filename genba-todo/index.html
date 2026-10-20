@@ -180,9 +180,11 @@ summary .badge{margin-left:8px}
 <div class="wrap">
   <header>
     <h1 class="brand"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#E3A008"/><path d="M136 322 V290 A126 126 0 0 1 388 290 V322 Z" fill="#1C2220"/><rect x="214" y="138" width="96" height="60" rx="18" fill="#1C2220"/><rect x="62" y="318" width="356" height="46" rx="23" fill="#1C2220"/><polyline points="206,262 246,300 322,220" fill="none" stroke="#E3A008" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></svg>現場TODO共有</h1>
-    <span class="who"><span id="who">読み込み中…</span> <button type="button" class="ghost" id="changeMe" hidden>名前を変える</button></span>
+    <span class="who"><span id="who">読み込み中…</span> <button type="button" class="ghost" id="howtoBtn" aria-expanded="false">使い方</button> <button type="button" class="ghost" id="changeMe" hidden>名前を変える</button></span>
   </header>
 
+  <!-- 使い方（ふだんは隠す。右上の「使い方」で出す） -->
+  <div id="howto" hidden style="display:flex;flex-direction:column;gap:8px">
   <div class="flow" aria-label="使い方（メンバーからメンバー１へ）">
     <span class="tag">メンバー→メンバー１</span>
     <span class="step"><b>①</b> メンバーがTODOを出す</span><span>→</span>
@@ -194,6 +196,7 @@ summary .badge{margin-left:8px}
     <span class="step"><b>①</b> メンバー１が依頼を出す</span><span>→</span>
     <span class="step"><b>②</b> メンバーが <b>確認済み</b> / <b>別途確認</b></span><span>→</span>
     <span class="step"><b>③</b> メンバー１が <b>完了✓</b></span>
+  </div>
   </div>
 
   <!-- 名前を選ぶ（初回だけ） -->
@@ -647,6 +650,14 @@ $('#pickName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 $('#changeMe').addEventListener('click', () => {
   try { localStorage.removeItem(KEY); } catch (e) {}
   myName = ''; presetDone = false; knownIds = null; sel.clear(); groupLabel = ''; showPick();
+});
+
+/* ---------- 使い方の表示 ---------- */
+$('#howtoBtn').addEventListener('click', () => {
+  const open = $('#howto').hidden;
+  $('#howto').hidden = !open;
+  $('#howtoBtn').setAttribute('aria-expanded', String(open));
+  $('#howtoBtn').textContent = open ? '使い方を閉じる' : '使い方';
 });
 
 /* ---------- 暗証番号 ---------- */
