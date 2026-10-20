@@ -1026,12 +1026,14 @@ function updateBadge(d) {
   if (!canBadge || !d || !d.me || !d.tasks) return;
   const n = d.tasks.filter(needsMe).length;
   try { (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } catch (e) {}
-  // iPhone は通知の許可が要る。ホーム画面から開いていて、まだ聞いていないときだけ案内する
-  let said = false; try { said = localStorage.getItem('genba-badge') === 'no'; } catch (e) {}
-  $('#badgePanel').hidden = !(isStandalone() && 'Notification' in window && Notification.permission === 'default' && !said);
+  // iPhone だけは、数字を出すのに通知の許可が要る。
+  // ホーム画面から開いていて、まだ一度も聞いていないときだけ案内する（パソコン・Android には出さない）
+  let said = false; try { said = !!localStorage.getItem('genba-badge'); } catch (e) {}
+  $('#badgePanel').hidden = !(isIOS() && isStandalone() && 'Notification' in window && Notification.permission === 'default' && !said);
 }
 $('#badgeAllow').addEventListener('click', () => {
   $('#badgePanel').hidden = true;
+  try { localStorage.setItem('genba-badge', 'asked'); } catch (e) {}   // 一度聞いたら、もう出さない
   try {
     Notification.requestPermission().then(p => {
       toast(p === 'granted' ? 'アイコンに件数を出すようにしました' : '件数は出しません（あとから携帯の設定で変えられます）');
