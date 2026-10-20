@@ -313,11 +313,11 @@ summary .badge{margin-left:8px}
       </details>
 
       <details class="panel" id="pushPanel" hidden>
-        <summary>携帯への通知<span class="who" id="pushState"></span></summary>
+        <summary>通知（アプリを閉じていても届く）<span class="who" id="pushState"></span></summary>
         <span id="pushText"></span>
         <div class="actions">
           <button type="button" class="primary" id="pushOn" hidden>通知を受け取る</button>
-          <button type="button" class="ghost" id="pushOff" hidden>この携帯で通知をやめる</button>
+          <button type="button" class="ghost" id="pushOff" hidden>この端末で通知をやめる</button>
         </div>
         <span class="who">通知には「新しいTODOが届きました」とだけ出ます。中身はアプリを開いて見てください。</span>
       </details>
@@ -1075,7 +1075,7 @@ async function enablePush() {
     const token = await getPushToken(push);
     await call('registerPush', myName, token, deviceName());
     try { localStorage.setItem('genba-push-token', token); } catch (e) {}
-    toast('この携帯で通知を受け取るようにしました');
+    toast('通知を受け取るようにしました');
   } catch (e) {
     toast('通知の設定ができませんでした：' + errMsg(e));
   }
@@ -1087,7 +1087,7 @@ async function disablePush() {
   try { await call('unregisterPush', myName, token); } catch (e) {}
   try { await loadFirebase(); if (!firebase.apps.length) firebase.initializeApp(data.push.config); await firebase.messaging().deleteToken(); } catch (e) {}
   try { localStorage.removeItem('genba-push-token'); } catch (e) {}
-  toast('この携帯の通知をやめました');
+  toast('この端末の通知をやめました');
   renderPush(data);
 }
 function renderPush(d) {
@@ -1099,11 +1099,11 @@ function renderPush(d) {
   if (!pushSupported()) {
     text = isIOS() ? 'iPhoneは、ホーム画面のヘルメットのアイコンから開いたときに設定できます（iOS 16.4以降）。' : 'この端末・ブラウザでは、通知を受け取れません。';
   } else if (Notification.permission === 'denied') {
-    text = '通知が止められています。携帯の「設定」→「通知」で、このアプリの通知を許可してください。';
+    text = deviceName() === 'パソコン' ? '通知が止められています。アドレス欄の左の鍵のマーク（または「︙」→「設定」）で、このアプリの通知を「許可」にしてください。' : '通知が止められています。携帯の「設定」→「通知」で、このアプリの通知を許可してください。';
   } else if (on) {
-    text = 'この携帯は、閉じていても通知を受け取ります。';
+    text = (deviceName() === 'パソコン' ? 'このパソコン' : 'この携帯') + 'は、閉じていても通知を受け取ります。';
   } else {
-    text = 'アプリを閉じていても、新しいTODOが届いたら通知が来るようにできます。';
+    text = 'アプリを閉じていても、新しいTODOが届いたら' + (deviceName() === 'パソコン' ? 'このパソコン' : 'この携帯') + 'に通知が来るようにできます。「通知を受け取る」を押して、出てきた確認で「許可」を押してください。';
     canOn = true;
   }
   $('#pushState').textContent = on ? '受け取る' : 'まだ設定していません';
