@@ -172,6 +172,12 @@ h3{font-size:15px;margin:0}
 .alertbar{border-color:var(--no);background:var(--no-bg);gap:6px}
 .alertbar strong{color:var(--no)}
 summary .badge{margin-left:8px}
+.setbtn{position:relative;font-size:14px;padding:6px 12px}
+.setbtn[aria-expanded=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.setbtn .badge{position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;font-size:11px}
+.settings{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--line);border-radius:10px;padding:10px}
+.settings details.panel{padding:10px 14px}
+.settings summary{font-size:14px}
 .a2hs{border-color:var(--accent);background:var(--wait-bg)}
 .a2hs b{color:var(--ink)}
 </style>
@@ -180,7 +186,7 @@ summary .badge{margin-left:8px}
 <div class="wrap">
   <header>
     <h1 class="brand"><svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#E3A008"/><path d="M136 322 V290 A126 126 0 0 1 388 290 V322 Z" fill="#1C2220"/><rect x="214" y="138" width="96" height="60" rx="18" fill="#1C2220"/><rect x="62" y="318" width="356" height="46" rx="23" fill="#1C2220"/><polyline points="206,262 246,300 322,220" fill="none" stroke="#E3A008" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></svg>現場TODO共有</h1>
-    <span class="who"><span id="who">読み込み中…</span> <button type="button" class="ghost" id="howtoBtn" aria-expanded="false">使い方</button> <button type="button" class="ghost" id="changeMe" hidden>名前を変える</button></span>
+    <span class="who"><span id="who">読み込み中…</span> <button type="button" id="setBtn" class="setbtn" aria-expanded="false" hidden>設定<span class="badge" id="setBadge" hidden></span></button></span>
   </header>
 
   <!-- 使い方（ふだんは隠す。右上の「使い方」で出す） -->
@@ -290,6 +296,12 @@ summary .badge{margin-left:8px}
         </div>
       </form>
 
+      <!-- 設定（右上の「設定」で開く） -->
+      <div class="settings" id="settingsBox" hidden>
+        <div class="actions">
+          <button type="button" class="ghost" id="howtoBtn" aria-expanded="false">使い方</button>
+          <button type="button" class="ghost" id="changeMe" hidden>名前を変える</button>
+        </div>
       <details class="panel" id="soundPanel">
         <summary>お知らせ音の設定<span class="who" id="soundState"></span></summary>
         <div class="field">
@@ -370,6 +382,8 @@ summary .badge{margin-left:8px}
           <div class="plist" id="peopleList"></div>
         </div>
       </details>
+
+      </div>
 
       <div class="toolbar">
         <div class="seg" role="group" aria-label="表示">
@@ -609,6 +623,7 @@ function apply(d) {
   $('#pickMe').hidden = true;
   $('#main').hidden = false;
   $('#who').textContent = d.me.name;
+  $('#setBtn').hidden = false;
   // 個人用の招待URLで入った人は、名前を変えられない
   $('#changeMe').hidden = d.byEmail || d.byToken;
   $('#addForm').hidden = !d.canCreate;
@@ -629,6 +644,7 @@ function showPick() {
   $('#pickMe').hidden = false;
   $('#who').textContent = '';
   $('#changeMe').hidden = true;
+  $('#setBtn').hidden = true;
   $('#pickList').replaceChildren(...(data.members.length ? data.members.map(m => el('button', {
     type: 'button', class: 'person',
     on: { click: () => { myName = m.name; $('#pickMe').hidden = true; $('#loading').hidden = false; load(); } }
@@ -653,6 +669,11 @@ $('#changeMe').addEventListener('click', () => {
 });
 
 /* ---------- 使い方の表示 ---------- */
+$('#setBtn').addEventListener('click', () => {
+  const open = $('#settingsBox').hidden;
+  $('#settingsBox').hidden = !open;
+  $('#setBtn').setAttribute('aria-expanded', String(open));
+});
 $('#howtoBtn').addEventListener('click', () => {
   const open = $('#howto').hidden;
   $('#howto').hidden = !open;
@@ -665,6 +686,7 @@ function showPinPanel(d) {
   $('#loading').hidden = true; $('#main').hidden = true; $('#pickMe').hidden = true;
   $('#pinPanel').hidden = false;
   $('#who').textContent = '';
+  $('#setBtn').hidden = true;
   $('#pinWho').textContent = `${d.pinName} さん、上司から伝えられた暗証番号（数字4けた）を入れてください。最初の1回だけです。`;
   $('#pinMsg').textContent = d.wrongPin ? '暗証番号がちがいます。もう一度入れてください。' : '';
   $('#pinInput').value = '';
@@ -687,11 +709,12 @@ function renderPeople(d) {
   $('#peoplePanel').hidden = !show;
   const alerts = show ? (d.alerts || []) : [];
   $('#alertBadge').hidden = !alerts.length; $('#alertBadge').textContent = alerts.length;
+  $('#setBadge').hidden = !alerts.length; $('#setBadge').textContent = alerts.length;
   $('#alertBar').hidden = !alerts.length;
   $('#alertBar').replaceChildren(...(alerts.length ? [
     el('strong', { text: '社外の人の有効期限' }),
     ...alerts.map(a => el('div', { text: `${a.name} さん：${fmtD(a.expiry)}${a.passed ? '（過ぎています。入れません）' : ' まで'}` })),
-    el('div', { class: 'actions' }, el('button', { type: 'button', text: '期限を見る・変える', on: { click: () => { $('#peoplePanel').open = true; $('#peoplePanel').scrollIntoView({ block: 'start' }); } } }))
+    el('div', { class: 'actions' }, el('button', { type: 'button', text: '期限を見る・変える', on: { click: () => { $('#settingsBox').hidden = false; $('#setBtn').setAttribute('aria-expanded', 'true'); $('#peoplePanel').open = true; $('#peoplePanel').scrollIntoView({ block: 'start' }); } } }))
   ] : []));
   if (!show) return;
   const levels = d.canAddBoss ? ['部下', '社外', '上司', '管理者'] : ['部下', '社外'];
