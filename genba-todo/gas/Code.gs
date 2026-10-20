@@ -12,7 +12,7 @@
  */
 
 // 版（アプリの一番下に出る。貼り付けとデプロイができたかの確認用）
-const VERSION = '10/20-A';
+const VERSION = '10/21-A';
 
 // 画面（GitHub Pages）の場所
 const PAGES_URL = 'https://ak05080707.github.io/rakugaki-app/genba-todo/';
@@ -67,7 +67,8 @@ function doPost(e) {
       const fns = {
         getData: getData_, addTask: addTask_, answer: answer_, check: check_, deleteTasks: deleteTasks_,
         addMember: addMember_, inviteLink: inviteLink_, resetLink: resetLink_, setPin: setPin_,
-        setExpiry: setExpiry_, setStopped: setStopped_
+        setExpiry: setExpiry_, setStopped: setStopped_,
+        registerPush: registerPush_, unregisterPush: unregisterPush_
       };
       const fn = fns[req.fn];
       if (!fn) throw new Error('この操作はできません。');
@@ -373,7 +374,8 @@ function getData_(clientName) {
     canCreate: me.role === '上司' || BUKA_CAN_CREATE,
     members: visibleMembers_(me, ms, sc).map(m => ({ name: m.name, role: m.role })),
     groups: me.level === '社外' ? [] : groups_(),
-    tasks: tasks
+    tasks: tasks,
+    push: pushWebConfig_()   // プッシュ通知の設定（まだなら null）
   });
   if (me.role === '上司') {
     const today = today_(), soon = addDays_(today, EXPIRY_WARN_DAYS);
@@ -444,6 +446,8 @@ function addTask_(clientName, t) {
       list.join('、'), safe_(t.group, 40), me.name, '{}', '', '', t.kind
     ]);
   });
+  // 宛先の人の携帯に通知する（失敗しても、TODOは出せたことにする）
+  try { notifyNewTask_(list.filter(n => n !== me.name), t.kind); } catch (e) { Logger.log('通知できませんでした：' + e); }
   return getData_(clientName);
 }
 
@@ -615,4 +619,141 @@ function setStopped_(clientName, name, stop) {
   if (m.name === me.name) throw new Error('自分を使えなくすることはできません。');
   withLock_(() => { sheet_(SHEET_MEMBER).getRange(m.row, MCOL.status).setValue(stop ? '停止' : ''); });
   return getData_(clientName);
+}
+
+// ===== プッシュ通知（Firebase Cloud Messaging） =====
+// Apps Script の「プロジェクトの設定」→「スクリプト プロパティ」に、次の3つを入れると動く
+//   FCM_WEB_CONFIG      … Firebase の「マイアプリ」に出る firebaseConfig（{ apiKey: … } の部分をそのまま貼る）
+//   FCM_VAPID_KEY       … 「Cloud Messaging」→「ウェブプッシュ証明書」の鍵ペア（公開鍵）
+//   FCM_SERVICE_ACCOUNT … 「サービスアカウント」→「新しい秘密鍵を生成」でできるファイルの中身（全部）
+// 通知を受け取る携帯の登録は「通知」シートに入る（さわらない）
+const SHEET_PUSH = '通知';
+const PUSH_HEAD = ['名前', '通知コード（さわらない）', '端末', '登録した日'];
+
+/** firebaseConfig を読む（JavaScript の書き方のままでも、JSON でも読める） */
+function pushWebConfig_() {
+  const props = PropertiesService.getScriptProperties();
+  const raw = props.getProperty('FCM_WEB_CONFIG'), vapid = props.getProperty('FCM_VAPID_KEY');
+  if (!raw || !vapid || !props.getProperty('FCM_SERVICE_ACCOUNT')) return null;
+  const cfg = {};
+  const re = /["']?(\w+)["']?\s*:\s*["']([^"']+)["']/g;
+  let m;
+  while ((m = re.exec(raw))) cfg[m[1]] = m[2];
+  if (!cfg.apiKey || !cfg.projectId || !cfg.messagingSenderId || !cfg.appId) return null;
+  return { config: cfg, vapid: String(vapid).trim() };
+}
+
+function pushSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ensureSheet_(ss, SHEET_PUSH, PUSH_HEAD);
+}
+
+/** この携帯で通知を受け取る（通知コードを登録する） */
+function registerPush_(clientName, token, device) {
+  const me = need_(clientName);
+  token = String(token || '').trim();
+  if (!token || token.length > 4096) throw new Error('通知の登録ができませんでした。');
+  withLock_(() => {
+    const sh = pushSheet_();
+    const n = sh.getLastRow() - 1;
+    const rows = n > 0 ? sh.getRange(2, 1, n, 2).getValues() : [];
+    for (let i = rows.length - 1; i >= 0; i--) if (String(rows[i][1]) === token) sh.deleteRow(i + 2);
+    sh.appendRow([me.name, token, safe_(device, 60), "'" + today_()]);
+  });
+  return { ok: true };
+}
+
+/** この携帯の通知をやめる */
+function unregisterPush_(clientName, token) {
+  need_(clientName);
+  withLock_(() => removePushTokens_([String(token || '')]));
+  return { ok: true };
+}
+
+function removePushTokens_(tokens) {
+  const sh = pushSheet_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return;
+  const rows = sh.getRange(2, 1, n, 2).getValues();
+  for (let i = rows.length - 1; i >= 0; i--) if (tokens.indexOf(String(rows[i][1])) >= 0) sh.deleteRow(i + 2);
+}
+
+/** 新しいTODOを、宛先の人の携帯に知らせる。中身（文章）は通知に出さない */
+function notifyNewTask_(names, kind) {
+  if (!names.length || !pushWebConfig_()) return;
+  const sh = pushSheet_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return;
+  const rows = sh.getRange(2, 1, n, 2).getValues().filter(r => names.indexOf(String(r[0])) >= 0 && r[1]);
+  if (!rows.length) return;
+  // 一人ひとりの「まだ返事をしていない件数」（アイコンの数字にする）
+  const tasks = tasks_();
+  const levelOf = {};
+  members_().forEach(m => { levelOf[m.name] = m.level; });
+  const waiting = name => tasks.filter(t => !t.checkedBy && !t.answers[name] &&
+    (t.to === 'all' ? levelOf[name] !== '社外' : t.to.indexOf(name) >= 0)).length;
+  const counts = {};
+  names.forEach(nm => { counts[nm] = waiting(nm); });
+  const sa = JSON.parse(PropertiesService.getScriptProperties().getProperty('FCM_SERVICE_ACCOUNT'));
+  const access = fcmAccessToken_(sa);
+  const url = 'https://fcm.googleapis.com/v1/projects/' + sa.project_id + '/messages:send';
+  const reqs = rows.map(r => ({
+    url: url, method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + access },
+    payload: JSON.stringify({ message: {
+      token: String(r[1]),
+      // 通知の表示は、携帯の中の部品（firebase-messaging-sw.js）が行う
+      data: { title: '現場TODO', body: '新しいTODO' + (kind ? '（' + kind + '）' : '') + 'が届きました。開いて確認してください。', badge: String(counts[r[0]] || 0) },
+      webpush: { headers: { Urgency: 'high', TTL: '86400' } }
+    } })
+  }));
+  const res = UrlFetchApp.fetchAll(reqs);
+  // 使えなくなった通知コード（アイコンを消した・携帯を変えた）は消しておく
+  const dead = [];
+  res.forEach((r, i) => {
+    const code = r.getResponseCode();
+    if (code === 404 || (code === 400 && /UNREGISTERED|registration-token/i.test(r.getContentText()))) dead.push(String(rows[i][1]));
+  });
+  if (dead.length) withLock_(() => removePushTokens_(dead));
+}
+
+/** Firebase に通知を頼むための、一時的な入館証（50分使い回す） */
+function fcmAccessToken_(sa) {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('fcm_access');
+  if (hit) return hit;
+  const now = Math.floor(Date.now() / 1000);
+  const enc = o => Utilities.base64EncodeWebSafe(JSON.stringify(o)).replace(/=+$/, '');
+  const head = enc({ alg: 'RS256', typ: 'JWT' });
+  const claim = enc({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 });
+  const sig = Utilities.base64EncodeWebSafe(Utilities.computeRsaSha256Signature(head + '.' + claim, sa.private_key)).replace(/=+$/, '');
+  const r = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+    method: 'post', muteHttpExceptions: true,
+    payload: { grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: head + '.' + claim + '.' + sig }
+  });
+  const j = JSON.parse(r.getContentText() || '{}');
+  if (!j.access_token) throw new Error('Firebase に入れませんでした：' + r.getContentText());
+  cache.put('fcm_access', j.access_token, 3000);
+  return j.access_token;
+}
+
+/** 設定の確かめ（Apps Script で実行する）：3つの設定が入っているか、Firebase に入れるかを実行ログに出す */
+function checkPush() {
+  const props = PropertiesService.getScriptProperties();
+  ['FCM_WEB_CONFIG', 'FCM_VAPID_KEY', 'FCM_SERVICE_ACCOUNT'].forEach(k => {
+    Logger.log(k + '：' + (props.getProperty(k) ? '入っています' : '★まだ入っていません'));
+  });
+  const w = pushWebConfig_();
+  Logger.log('firebaseConfig の読み取り：' + (w ? 'OK（' + w.config.projectId + '）' : '★読み取れません。貼り方を確かめてください'));
+  try {
+    const sa = JSON.parse(props.getProperty('FCM_SERVICE_ACCOUNT') || '{}');
+    CacheService.getScriptCache().remove('fcm_access');
+    fcmAccessToken_(sa);
+    Logger.log('Firebase への接続：OK');
+  } catch (e) {
+    Logger.log('Firebase への接続：★できません（' + e.message + '）');
+  }
+  pushSheet_();
+  Logger.log('「通知」シート：OK');
 }

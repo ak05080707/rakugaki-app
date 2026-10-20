@@ -312,6 +312,16 @@ summary .badge{margin-left:8px}
         </div>
       </details>
 
+      <details class="panel" id="pushPanel" hidden>
+        <summary>携帯への通知<span class="who" id="pushState"></span></summary>
+        <span id="pushText"></span>
+        <div class="actions">
+          <button type="button" class="primary" id="pushOn" hidden>通知を受け取る</button>
+          <button type="button" class="ghost" id="pushOff" hidden>この携帯で通知をやめる</button>
+        </div>
+        <span class="who">通知には「新しいTODOが届きました」とだけ出ます。中身はアプリを開いて見てください。</span>
+      </details>
+
       <details class="panel" id="peoplePanel" hidden>
         <summary>メンバーの追加・招待<span class="badge" id="alertBadge" hidden></span></summary>
         <div class="invite" id="inviteCard" hidden></div>
@@ -1030,8 +1040,87 @@ $('#badgeAllow').addEventListener('click', () => {
   } catch (e) {}
 });
 $('#badgeLater').addEventListener('click', () => { try { localStorage.setItem('genba-badge', 'no'); } catch (e) {} $('#badgePanel').hidden = true; });
+// ---------- プッシュ通知（閉じていても届く） ----------
+const FB_VER = '10.12.2';
+let fbLoading = null, pushChecked = false;
+function loadFirebase() {
+  if (window.firebase && firebase.messaging) return Promise.resolve();
+  if (fbLoading) return fbLoading;
+  const add = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  fbLoading = add('https://www.gstatic.com/firebasejs/' + FB_VER + '/firebase-app-compat.js')
+    .then(() => add('https://www.gstatic.com/firebasejs/' + FB_VER + '/firebase-messaging-compat.js'));
+  return fbLoading;
+}
+const pushSupported = () => 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
+const deviceName = () => isIOS() ? 'iPhone' : (/Android/.test(navigator.userAgent) ? 'Android' : 'パソコン');
+function savedPushToken() { try { return localStorage.getItem('genba-push-token') || ''; } catch (e) { return ''; } }
+async function getPushToken(push) {
+  await loadFirebase();
+  const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js?c=' + encodeURIComponent(JSON.stringify(push.config)), { scope: './' });
+  await navigator.serviceWorker.ready;
+  if (!firebase.apps.length) firebase.initializeApp(push.config);
+  return firebase.messaging().getToken({ vapidKey: push.vapid, serviceWorkerRegistration: reg });
+}
+async function enablePush() {
+  const push = data && data.push;
+  if (!push) return;
+  let perm;
+  try { perm = await Notification.requestPermission(); } catch (e) { perm = 'denied'; }
+  if (perm !== 'granted') { toast('通知が許可されませんでした。携帯の設定で、このアプリの通知を許可してください'); renderPush(data); return; }
+  $('#pushOn').disabled = true; $('#pushText').textContent = '設定しています…';
+  try {
+    const token = await getPushToken(push);
+    await call('registerPush', myName, token, deviceName());
+    try { localStorage.setItem('genba-push-token', token); } catch (e) {}
+    toast('この携帯で通知を受け取るようにしました');
+  } catch (e) {
+    toast('通知の設定ができませんでした：' + errMsg(e));
+  }
+  $('#pushOn').disabled = false;
+  renderPush(data);
+}
+async function disablePush() {
+  const token = savedPushToken();
+  try { await call('unregisterPush', myName, token); } catch (e) {}
+  try { await loadFirebase(); if (!firebase.apps.length) firebase.initializeApp(data.push.config); await firebase.messaging().deleteToken(); } catch (e) {}
+  try { localStorage.removeItem('genba-push-token'); } catch (e) {}
+  toast('この携帯の通知をやめました');
+  renderPush(data);
+}
+function renderPush(d) {
+  const panel = $('#pushPanel');
+  if (!d || !d.me || !d.push) { panel.hidden = true; return; }
+  panel.hidden = false;
+  const on = !!savedPushToken() && 'Notification' in window && Notification.permission === 'granted';
+  let text, canOn = false;
+  if (!pushSupported()) {
+    text = isIOS() ? 'iPhoneは、ホーム画面のヘルメットのアイコンから開いたときに設定できます（iOS 16.4以降）。' : 'この端末・ブラウザでは、通知を受け取れません。';
+  } else if (Notification.permission === 'denied') {
+    text = '通知が止められています。携帯の「設定」→「通知」で、このアプリの通知を許可してください。';
+  } else if (on) {
+    text = 'この携帯は、閉じていても通知を受け取ります。';
+  } else {
+    text = 'アプリを閉じていても、新しいTODOが届いたら通知が来るようにできます。';
+    canOn = true;
+  }
+  $('#pushState').textContent = on ? '受け取る' : 'まだ設定していません';
+  $('#pushText').textContent = text;
+  $('#pushOn').hidden = !canOn;
+  $('#pushOff').hidden = !on;
+  // 一度設定した携帯は、開くたびに通知コードが変わっていないか確かめる
+  if (on && !pushChecked) {
+    pushChecked = true;
+    getPushToken(d.push).then(t => {
+      if (t && t !== savedPushToken()) return call('registerPush', myName, t, deviceName()).then(() => { try { localStorage.setItem('genba-push-token', t); } catch (e) {} });
+    }).catch(() => {});
+  }
+}
+$('#pushOn').addEventListener('click', enablePush);
+$('#pushOff').addEventListener('click', disablePush);
+
 const applyBase = apply;
-apply = function (d) { applyBase(d); renderA2hs(d); updateBadge(d); };
+apply = function (d) { applyBase(d); renderA2hs(d); updateBadge(d); renderPush(d); };
 
 if (CONF.api && (CONF.key || CONF.t)) load(); else showSetup();
 </script>
