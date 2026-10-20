@@ -227,6 +227,15 @@ summary .badge{margin-left:8px}
     <div class="actions"><button type="button" id="a2hsClose">閉じる</button></div>
   </div>
 
+  <div class="panel a2hs" id="badgePanel" hidden>
+    <h2>アイコンに件数を出しますか？</h2>
+    <span>ホーム画面のアイコンの右上に、まだ返事をしていないTODOの件数が赤い丸で出ます。次の画面で「<b>許可</b>」を押してください。</span>
+    <div class="actions">
+      <button type="button" class="primary" id="badgeAllow">件数を出す</button>
+      <button type="button" id="badgeLater">出さない</button>
+    </div>
+  </div>
+
   <div id="main" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
       <div class="panel alertbar" id="alertBar" hidden></div>
@@ -998,8 +1007,31 @@ function renderA2hs(d) {
   $('#a2hsPanel').hidden = false;
 }
 $('#a2hsClose').addEventListener('click', () => { try { localStorage.setItem('genba-a2hs', '1'); } catch (e) {} $('#a2hsPanel').hidden = true; });
+// アイコンの右上の件数（まだ返事をしていない自分あてのTODO）
+//   iPhone：ホーム画面のアイコンから開き、通知を許可したときだけ出る
+//   パソコン：アプリとして入れたときに出る ／ Android：出ない
+const canBadge = 'setAppBadge' in navigator;
+const isStandalone = () => window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+function updateBadge(d) {
+  if (!canBadge || !d || !d.me || !d.tasks) return;
+  const n = d.tasks.filter(needsMe).length;
+  try { (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {}); } catch (e) {}
+  // iPhone は通知の許可が要る。ホーム画面から開いていて、まだ聞いていないときだけ案内する
+  let said = false; try { said = localStorage.getItem('genba-badge') === 'no'; } catch (e) {}
+  $('#badgePanel').hidden = !(isStandalone() && 'Notification' in window && Notification.permission === 'default' && !said);
+}
+$('#badgeAllow').addEventListener('click', () => {
+  $('#badgePanel').hidden = true;
+  try {
+    Notification.requestPermission().then(p => {
+      toast(p === 'granted' ? 'アイコンに件数を出すようにしました' : '件数は出しません（あとから携帯の設定で変えられます）');
+      updateBadge(data);
+    });
+  } catch (e) {}
+});
+$('#badgeLater').addEventListener('click', () => { try { localStorage.setItem('genba-badge', 'no'); } catch (e) {} $('#badgePanel').hidden = true; });
 const applyBase = apply;
-apply = function (d) { applyBase(d); renderA2hs(d); };
+apply = function (d) { applyBase(d); renderA2hs(d); updateBadge(d); };
 
 if (CONF.api && (CONF.key || CONF.t)) load(); else showSetup();
 </script>
