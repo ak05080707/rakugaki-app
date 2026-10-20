@@ -55,9 +55,9 @@ button,.btn{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(-
 <div class="wrap">
   <header>
     <img src="icons/icon-192.png" alt="">
-    <h1>現場TODO　招待URLづくり</h1>
+    <h1>現場TODO　管理者用URLづくり</h1>
   </header>
-  <p class="lead">管理者用のページです。2つを入れると、みんなに配るURLとQRコードができます。入れた内容は、このページの外には送られず、保存もされません。</p>
+  <p class="lead">管理者が最初にアプリに入るためのURLを作るページです。2つを入れると、URLとQRコードができます。入れた内容は、このページの外には送られず、保存もされません。<br>ほかの人には、アプリに入ってから「<b>メンバーの追加・招待</b>」で、その人専用のURLを送ってください。</p>
 
   <div class="panel">
     <div class="step">
@@ -80,22 +80,21 @@ button,.btn{font:inherit;cursor:pointer;border-radius:6px;border:1px solid var(-
   </div>
 
   <div class="panel" id="resultPanel" hidden>
-    <h2>みんなに配るURL</h2>
+    <h2>管理者用のURL</h2>
     <div class="result">
       <div class="qr" id="qr" aria-label="招待用のQRコード"></div>
       <div class="out">
         <div class="url" id="url"></div>
         <div class="actions">
-          <a class="btn primary" id="line" href="#" target="_blank" rel="noopener">LINEで送る</a>
+          <a class="btn primary" id="open" href="#" target="_blank" rel="noopener">開いてみる</a>
           <button type="button" id="copy">URLをコピー</button>
-          <a class="btn" id="open" href="#" target="_blank" rel="noopener">開いてみる</a>
         </div>
         <div class="okbox" id="copied" hidden>コピーしました</div>
       </div>
     </div>
     <div class="note">
-      その場にいる人には、携帯のカメラでQRコードを読んでもらいます。離れている人には「LINEで送る」で送ります。<br>
-      URLには合言葉が入っています。社外の人には送らないでください。
+      携帯で使うときは、携帯のカメラでQRコードを読みます。<br>
+      このURLには合言葉が入っています。<b>管理者以外には送らないでください。</b>
     </div>
   </div>
 </div>
@@ -116,8 +115,6 @@ function update() {
   const url = page + '#api=' + encodeURIComponent(api) + '&key=' + encodeURIComponent(key);
   $('#url').textContent = url;
   $('#open').href = url;
-  const text = '【現場TODO共有】下のURLを開いて、自分の名前を選んでください。携帯では、開いたあと「ホーム画面に追加」をしてください。\n' + url;
-  $('#line').href = 'https://line.me/R/share?text=' + encodeURIComponent(text);
   $('#qr').replaceChildren();
   try { qr = new QRCode($('#qr'), { text: url, width: 400, height: 400, correctLevel: QRCode.CorrectLevel.M }); $('#qr').hidden = false; }
   catch (e) { $('#qr').hidden = true; }

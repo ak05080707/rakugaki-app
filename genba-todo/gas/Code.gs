@@ -3,18 +3,23 @@
  * データはこのスプレッドシートの「TODO」「メンバー」「グループ」シートに保存されます。
  * AIは使っていません。
  *
- * 役割は2つ：「メンバー」（TODOを出す・完了にする・削除する側）と「メンバー１」（返事をする側）。
- * プログラムの中では、メンバー＝'上司'、メンバー１＝'部下' という名前で扱っています。
+ * 役割は4つ（「メンバー」シートのC列）
+ *   管理者 … 全部できる。上司・管理者を追加できるのは管理者だけ
+ *   上司   … 部下・社外の人の追加と招待、TODOを出す・完了にする・削除する（以前の「メンバー」）
+ *   部下   … 自分あてのTODOに返事をする。上司へ依頼を出す（以前の「メンバー１」。空欄も部下）
+ *   社外   … 自分あてのTODOだけ。有効期限つき。招待URL＋暗証番号で入る
+ * プログラムの中では、管理者と上司をまとめて role='上司'、部下と社外を role='部下' と呼ぶ。
  */
 
 // 版（アプリの一番下に出る。貼り付けとデプロイができたかの確認用）
-const VERSION = '10/19-A';
+const VERSION = '10/20-A';
 
 // 画面（GitHub Pages）の場所
 const PAGES_URL = 'https://ak05080707.github.io/rakugaki-app/genba-todo/';
 
 // ===== 設定（必要なら書き換えてください） =====
-const BUKA_CAN_CREATE = true; // メンバー１もメンバーへ依頼を出せる（出せないようにするなら false）
+const BUKA_CAN_CREATE = true; // 部下もTODO（依頼）を出せる（出せないようにするなら false）
+const EXPIRY_WARN_DAYS = 7;   // 社外の人の有効期限が、あと何日で「もうすぐ期限」と出すか
 
 // ===== シート名と見出し =====
 const SHEET_TODO = 'TODO';
@@ -23,18 +28,24 @@ const MEMBER_ALIASES = ['メンバー', 'メンバー１', 'メンバー1']; // 
 const SHEET_GROUP = 'グループ';
 const TODO_HEAD = ['ID', '作成日時', '工事名', '段取り or チェック', '期限', '宛先', 'グループ名', '出した人', '返事', '確認者', '確認日時', '種類'];
 const KINDS = ['確認', 'お願い', '質問'];
-const MEMBER_HEAD = ['名前', 'メールアドレス（任意）', '役割（メンバー/メンバー１）', '一覧に出さない（○を入れる）'];
+const LEVELS = ['管理者', '上司', '部下', '社外'];
+const MEMBER_HEAD = ['名前', 'メールアドレス（任意）', '役割（管理者/上司/部下/社外）', '一覧に出さない（○を入れる）',
+  'チーム（「、」で区切る）', '担当工事（「、」で区切る）', '有効期限（社外の人）', '状態（停止）',
+  '追加した人', '追加した日', '招待コード（さわらない）', '暗証番号（さわらない）'];
 const GROUP_HEAD = ['グループ名', 'メンバー（名前を「、」で区切る）'];
 const COL = { id: 1, created: 2, project: 3, title: 4, due: 5, to: 6, group: 7, from: 8, answers: 9, checkedBy: 10, checkedAt: 11, kind: 12 };
+const MCOL = { name: 1, email: 2, level: 3, hidden: 4, teams: 5, projects: 6, expiry: 7, status: 8, addedBy: 9, addedAt: 10, token: 11, pin: 12 };
+
+// このリクエストで、だれが使っているか（doPost の最初に決める）
+let AUTH_ = null;
 
 /**
  * 画面は GitHub Pages に引っ越した。このURLを直接開いた人には案内だけ出す
- * （画面からの読み書きは、下の doPost が合言葉つきで受け付ける）
  */
 function doGet() {
   const html = '<div style="font-family:sans-serif;padding:24px;line-height:1.8">' +
     '<h2>現場TODO共有は、新しいURLに引っ越しました</h2>' +
-    '<p>管理者から届いた、新しいURLを開いてください。</p>' +
+    '<p>上司から届いた、新しいURLを開いてください。</p>' +
     '<p>（ホーム画面のアイコンも、新しいURLで作り直してください）</p></div>';
   return HtmlService.createHtmlOutput(html).setTitle('現場TODO共有')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -42,22 +53,54 @@ function doGet() {
 
 /**
  * 画面（GitHub Pages）からの読み書きの入口。
- * 本文は {"key":"合言葉","fn":"getData","args":[...]} の形。合言葉が違うと何もしない
+ * 本文は {"t":"招待コード","pin":"暗証番号","fn":"getData","args":[...]}
+ *     または（管理者が最初に入るとき）{"key":"合言葉","fn":...}
  */
 function doPost(e) {
   let out;
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    const key = PropertiesService.getScriptProperties().getProperty('GENBA_KEY');
-    if (!key || req.key !== key) throw new Error('合言葉が違います。管理者から届いたURLを開き直してください。');
-    const fns = { getData: getData_, addTask: addTask_, answer: answer_, check: check_, deleteTasks: deleteTasks_ };
-    const fn = fns[req.fn];
-    if (!fn) throw new Error('この操作はできません。');
-    out = { ok: true, data: fn.apply(null, Array.isArray(req.args) ? req.args : []) };
+    AUTH_ = auth_(req);
+    if (AUTH_.needPin) {
+      out = { ok: true, data: { ver: VERSION, needPin: true, pinName: AUTH_.name, wrongPin: AUTH_.wrongPin } };
+    } else {
+      const fns = {
+        getData: getData_, addTask: addTask_, answer: answer_, check: check_, deleteTasks: deleteTasks_,
+        addMember: addMember_, inviteLink: inviteLink_, resetLink: resetLink_, setPin: setPin_,
+        setExpiry: setExpiry_, setStopped: setStopped_
+      };
+      const fn = fns[req.fn];
+      if (!fn) throw new Error('この操作はできません。');
+      out = { ok: true, data: fn.apply(null, Array.isArray(req.args) ? req.args : []) };
+    }
   } catch (err) {
     out = { ok: false, error: String((err && err.message) || err) };
   }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** だれが使っているかを決める。招待コード（個人用）か、合言葉（管理者が最初に入るとき）か */
+function auth_(req) {
+  if (req.t) {
+    const m = members_().find(x => x.token && x.token === String(req.t));
+    if (!m) throw new Error('この招待URLは使えなくなっています。上司に新しいURLをもらってください。');
+    checkActive_(m);
+    if (m.pinHash && hashPin_(String(req.pin || ''), m.token) !== m.pinHash) {
+      return { needPin: true, name: m.name, wrongPin: !!req.pin };
+    }
+    return { mode: 'token', me: m };
+  }
+  const key = PropertiesService.getScriptProperties().getProperty('GENBA_KEY');
+  if (key && req.key === key) return { mode: 'key' };
+  throw new Error('URLが正しくありません。上司から届いたURLを開き直してください。');
+}
+
+/** 停止中・有効期限切れの人は入れない */
+function checkActive_(m) {
+  if (m.stopped) throw new Error('このURLは使えなくなっています。上司に連絡してください。');
+  if (m.level === '社外' && m.expiry && today_() > m.expiry) {
+    throw new Error('有効期限（' + m.expiry.replace(/-/g, '/') + '）が過ぎています。上司に連絡してください。');
+  }
 }
 
 /** 合言葉を作る（まだなければ）。読みまちがえにくい文字だけ使う */
@@ -65,50 +108,58 @@ function key_() {
   const props = PropertiesService.getScriptProperties();
   let key = props.getProperty('GENBA_KEY');
   if (!key) {
-    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-    key = '';
-    for (let i = 0; i < 10; i++) key += chars.charAt(Math.floor(Math.random() * chars.length));
+    key = randomCode_(10);
     props.setProperty('GENBA_KEY', key);
   }
   return key;
 }
 
-/** みんなに配るURLを実行ログに出す（デプロイしたあとに実行する） */
+function randomCode_(len) {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return s;
+}
+
+/** 管理者用のURLを実行ログに出す（デプロイしたあとに実行する） */
 function showUrl() {
   const key = key_();
   const api = ScriptApp.getService().getUrl();
+  Logger.log('合言葉：' + key);
+  Logger.log('管理者用のURLづくりのページ（URLと合言葉を入れるとQRコードができる）：' + PAGES_URL + 'setup.html');
   if (!api) {
     Logger.log('まだ公開（デプロイ）されていません。先に「デプロイ」をしてから、もう一度 showUrl を実行してください。');
-    Logger.log('合言葉：' + key);
     return;
   }
-  Logger.log('合言葉：' + key);
-  Logger.log('招待URLづくりのページ（URLと合言葉を入れるとQRコードができる）：' + PAGES_URL + 'setup.html');
   if (!/\/exec$/.test(api)) {
     Logger.log('（注意）ここで分かったURLが /exec で終わっていません：' + api);
-    Logger.log('デプロイの画面に出る「ウェブアプリのURL」（/exec で終わるもの）と、上の合言葉を、新しい画面の「接続の設定」に入れてください：' + PAGES_URL);
+    Logger.log('デプロイの画面に出る「ウェブアプリのURL」（/exec で終わるもの）と、上の合言葉を、上のページに入れてください。');
     return;
   }
-  Logger.log('みんなに配るURL（これを全部コピーして送る）：');
+  Logger.log('管理者用のURL（管理者が最初に入るときに使う。ほかの人には、アプリの「メンバーの追加・招待」から個人用のURLを送る）：');
   Logger.log(PAGES_URL + '#api=' + encodeURIComponent(api) + '&key=' + key);
 }
 
-/** 合言葉を作り直す（URLが外にもれたとき）。前のURLは使えなくなる */
+/** 合言葉を作り直す（管理者用のURLが外にもれたとき）。個人用の招待URLはそのまま使える */
 function resetKey() {
   PropertiesService.getScriptProperties().deleteProperty('GENBA_KEY');
   showUrl();
 }
 
-/** 最初に1回だけ実行：シートと見出しを作る */
+/** 最初に1回だけ実行：シートと見出しを作る（あとから実行しても、データは消えない） */
 function setup() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const td = ensureSheet_(ss, SHEET_TODO, TODO_HEAD);
   // あとから増えた列（種類）の見出しを足す
   if (!String(td.getRange(1, COL.kind).getValue()).trim()) td.getRange(1, COL.kind).setValue('種類').setFontWeight('bold');
   const m = memberSheet_(ss) || ensureSheet_(ss, SHEET_MEMBER, MEMBER_HEAD);
-  if (m.getLastRow() < 2) m.appendRow(['（例）山田 太郎', Session.getEffectiveUser().getEmail(), 'メンバー']);
-  // あとから増えた列（一覧に出さない）の見出しを足す。もう一度 setup を実行すると付く
-  if (!String(m.getRange(1, 4).getValue()).trim()) m.getRange(1, 4).setValue(MEMBER_HEAD[3]).setFontWeight('bold');
+  if (m.getLastRow() < 2) m.appendRow(['（例）山田 太郎', '', '管理者']);
+  // あとから増えた列の見出しを足す（すでに何か書いてある見出しは変えない）
+  for (let c = 4; c <= MEMBER_HEAD.length; c++) {
+    if (!String(m.getRange(1, c).getValue()).trim()) m.getRange(1, c).setValue(MEMBER_HEAD[c - 1]).setFontWeight('bold');
+  }
+  // 招待コードと暗証番号の列は、まちがえて書き換えないように隠す
+  m.hideColumns(MCOL.token, 2);
   const g = ensureSheet_(ss, SHEET_GROUP, GROUP_HEAD);
   if (g.getLastRow() < 2) g.appendRow(['（例）1班', '（例）山田 太郎']);
   key_();
@@ -141,31 +192,64 @@ function sheet_(name) {
 function rows_(name) {
   const sh = sheet_(name);
   const n = sh.getLastRow() - 1;
-  return n > 0 ? sh.getRange(2, 1, n, sh.getLastColumn()).getValues() : [];
+  return n > 0 ? sh.getRange(2, 1, n, Math.max(sh.getLastColumn(), 1)).getValues() : [];
 }
 
 // ===== 読み込み =====
+const splitList_ = v => String(v || '').split(/[、,，\n]+/).map(s => s.trim()).filter(Boolean);
+
 function members_() {
-  return rows_(SHEET_MEMBER)
-    .map(r => ({ name: String(r[0]).trim(), email: String(r[1] || '').trim().toLowerCase(), role: isBossWord_(r[2]) ? '上司' : '部下', hidden: !!String(r[3] || '').trim() }))
-    .filter(m => m.name);
+  return rows_(SHEET_MEMBER).map((r, i) => {
+    const level = levelOf_(r[MCOL.level - 1]);
+    return {
+      row: i + 2,
+      name: String(r[MCOL.name - 1] || '').trim(),
+      email: String(r[MCOL.email - 1] || '').trim().toLowerCase(),
+      level: level,
+      role: (level === '管理者' || level === '上司') ? '上司' : '部下',
+      hidden: !!String(r[MCOL.hidden - 1] || '').trim(),
+      teams: splitList_(r[MCOL.teams - 1]),
+      projects: splitList_(r[MCOL.projects - 1]),
+      expiry: fmtDate_(r[MCOL.expiry - 1]),
+      stopped: String(r[MCOL.status - 1] || '').indexOf('停止') >= 0,
+      addedBy: String(r[MCOL.addedBy - 1] || '').trim(),
+      addedAt: fmtDate_(r[MCOL.addedAt - 1]),
+      token: String(r[MCOL.token - 1] || '').trim(),
+      pinHash: String(r[MCOL.pin - 1] || '').trim()
+    };
+  }).filter(m => m.name);
 }
 
-/** 役割の列が「メンバー」（または以前の書き方「上司」）なら、出す側として扱う */
-function isBossWord_(v) {
-  const s = String(v || '').replace(/s/g, '');
-  return s === 'メンバー' || s === '上司';
+/** 役割の列の書き方 → 役割。「メンバー」「上司」は上司、空欄やそれ以外は部下 */
+function levelOf_(v) {
+  const s = String(v || '').replace(/\s/g, '');
+  if (s === '管理者') return '管理者';
+  if (s === '上司' || s === 'メンバー') return '上司';
+  if (s === '社外') return '社外';
+  return '部下';
 }
 
 function groups_() {
   return rows_(SHEET_GROUP)
-    .map(r => ({ name: String(r[0]).trim(), members: String(r[1] || '').split(/[、,，\n]+/).map(s => s.trim()).filter(Boolean) }))
+    .map(r => ({ name: String(r[0]).trim(), members: splitList_(r[1]) }))
     .filter(g => g.name);
 }
 
 function fmtDate_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-  return String(v || '');
+  const s = String(v || '').trim().replace(/\//g, '-');
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2) : s;
+}
+
+function today_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function addDays_(ymd, n) {
+  const p = ymd.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2] + n);
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
 function tasks_() {
@@ -189,50 +273,127 @@ function tasks_() {
   });
 }
 
-/** 今の利用者を決める。会社のGoogleアカウントでメールが分かればそれを優先する */
+/**
+ * 今の利用者を決める。
+ * 招待URL（個人用）で入った人は、その人。
+ * 合言葉のURLで入った人は、選んだ名前（ただし、まだ個人用の招待URLを持っていない社員だけ。社外の人は不可）
+ */
 function resolveMe_(clientName) {
-  const ms = members_();
-  const email = (Session.getActiveUser().getEmail() || '').toLowerCase();
-  if (email) {
-    const byEmail = ms.find(m => m.email && m.email === email);
-    if (byEmail) return { me: byEmail, byEmail: true };
+  if (AUTH_ && AUTH_.mode === 'token') return { me: AUTH_.me, byToken: true };
+  const m = members_().find(x => x.name === clientName);
+  if (m && keyLoginOk_(m)) return { me: m, byToken: false };
+  return { me: null, byToken: false };
+}
+
+/** 合言葉のURLで、名前を選んで入れる人 */
+function keyLoginOk_(m) {
+  // 管理者は、個人用のURLを持っていても合言葉のURLで入れる（URLをなくしたときのため）
+  return !m.stopped && m.level !== '社外' && (!m.token || m.level === '管理者');
+}
+
+// ===== 見える範囲（チーム・工事） =====
+/**
+ * 上司が見られる範囲。管理者は全部。
+ * 上司にチームも担当工事も決めていなければ、今までどおり全部見られる。
+ */
+function scope_(me, ms) {
+  if (me.level === '管理者') return { all: true };
+  if (me.level === '上司' && !me.teams.length && !me.projects.length) return { all: true };
+  const names = {};
+  names[me.name] = true;
+  if (me.teams.length) ms.forEach(m => { if (m.teams.some(t => me.teams.indexOf(t) >= 0)) names[m.name] = true; });
+  if (me.projects.length) ms.forEach(m => { if (m.projects.some(p => me.projects.indexOf(p) >= 0)) names[m.name] = true; });
+  const projects = {};
+  me.projects.forEach(p => { projects[p] = true; });
+  return { all: false, names: names, projects: projects };
+}
+
+function isMine_(me, t) {
+  const R = t.to === 'all' ? null : t.to;
+  if (t.from === me.name) return true;
+  if (!R) return me.level !== '社外';   // 以前の「全員」あては、社外の人には見せない
+  return R.indexOf(me.name) >= 0;
+}
+
+function canSeeTask_(me, sc, t) {
+  if (isMine_(me, t)) return true;
+  if (me.role !== '上司') return false;          // 部下・社外は、自分に関係するものだけ
+  if (sc.all) return true;
+  if (t.project && sc.projects[t.project]) return true;
+  const people = [t.from].concat(t.to === 'all' ? [] : t.to);
+  return people.some(n => sc.names[n]);
+}
+
+/** 宛先に選べる人（画面の「人を選ぶ」） */
+function visibleMembers_(me, ms, sc) {
+  const live = ms.filter(m => !m.stopped);
+  if (me.level === '管理者' || (me.level === '上司' && sc.all)) return live;
+  const shares = m => m.teams.some(t => me.teams.indexOf(t) >= 0) || m.projects.some(p => me.projects.indexOf(p) >= 0);
+  if (me.level === '上司') return live.filter(m => m.name === me.name || m.role === '上司' || sc.names[m.name]);
+  if (me.level === '社外') {
+    const bosses = live.filter(m => m.role === '上司' && shares(m));
+    const list = bosses.length ? bosses : live.filter(m => m.level === '管理者');
+    return list.concat(live.filter(m => m.name === me.name));
   }
-  const byName = ms.find(m => m.name === clientName);
-  if (!byName) return { me: null, byEmail: false };
-  // メールが登録されている人は、本人のアカウントでしか名乗れない
-  if (byName.email && email && byName.email !== email) return { me: null, byEmail: false };
-  return { me: byName, byEmail: false };
+  // 部下：一覧に出さない人と、関係のない社外の人は出さない
+  return live.filter(m => m.name === me.name || (!m.hidden && (m.level !== '社外' || shares(m))));
+}
+
+/** 上司が追加・招待・停止できる人 */
+function manageable_(me, ms, sc) {
+  if (me.level === '管理者') return ms;
+  if (me.level !== '上司') return [];
+  return ms.filter(m => m.name === me.name ||
+    ((m.level === '部下' || m.level === '社外') && (sc.all || sc.names[m.name] || m.addedBy === me.name)));
+}
+
+function canEditExpiry_(me, m) {
+  return me.level === '管理者' || (me.level === '上司' && m.addedBy === me.name);
 }
 
 /** 画面が読む全データ */
 function getData_(clientName) {
   const r = resolveMe_(clientName);
-  // 全部のTODOを見られるのはメンバー（出す側）だけ。メンバー１には、自分あてと自分が出したものだけを渡す
   const ms = members_();
-  let tasks = [];
-  if (r.me) {
-    const n = r.me.name;
-    const roleOf = {};
-    ms.forEach(m => { roleOf[m.name] = m.role; });
-    tasks = tasks_().map(t => Object.assign(t, { fromRole: roleOf[t.from] || '' }));
-    if (r.me.role !== '上司') tasks = tasks.filter(t => t.from === n || t.to === 'all' || t.to.indexOf(n) >= 0);
+  const base = { ver: VERSION, byToken: r.byToken, groups: [], tasks: [] };
+  if (!r.me) {
+    // まだ名前が決まっていない：合言葉のURLで、名前を選んで入れる人だけ出す
+    return Object.assign(base, {
+      me: null, canCreate: false,
+      members: ms.filter(m => keyLoginOk_(m) && !m.hidden).map(m => ({ name: m.name, role: m.role }))
+    });
   }
-  return {
-    ver: VERSION,
-    me: r.me ? { name: r.me.name, role: r.me.role } : null,
-    byEmail: r.byEmail,
-    canCreate: !!r.me && (r.me.role === '上司' || BUKA_CAN_CREATE),
-    // 「一覧に出さない」の人は、メンバー１の一覧には入れない。メンバー（出す側）と本人には見える
-    members: ms.filter(m => !m.hidden || (r.me && (r.me.role === '上司' || m.name === r.me.name))).map(m => ({ name: m.name, role: m.role })),
-    groups: groups_(),
+  const me = r.me;
+  const sc = scope_(me, ms);
+  const roleOf = {};
+  ms.forEach(m => { roleOf[m.name] = m.role; });
+  const tasks = tasks_().filter(t => canSeeTask_(me, sc, t)).map(t => Object.assign(t, { fromRole: roleOf[t.from] || '' }));
+  const data = Object.assign(base, {
+    me: { name: me.name, role: me.role, level: me.level, expiry: me.expiry },
+    canCreate: me.role === '上司' || BUKA_CAN_CREATE,
+    members: visibleMembers_(me, ms, sc).map(m => ({ name: m.name, role: m.role })),
+    groups: me.level === '社外' ? [] : groups_(),
     tasks: tasks
-  };
+  });
+  if (me.role === '上司') {
+    const today = today_(), soon = addDays_(today, EXPIRY_WARN_DAYS);
+    const list = manageable_(me, ms, sc);
+    data.people = list.map(m => ({
+      name: m.name, level: m.level, teams: m.teams, projects: m.projects, expiry: m.expiry,
+      stopped: m.stopped, addedBy: m.addedBy, hasLink: !!m.token, hasPin: !!m.pinHash,
+      canEditExpiry: canEditExpiry_(me, m), isMe: m.name === me.name
+    }));
+    data.alerts = list.filter(m => m.level === '社外' && !m.stopped && m.expiry && m.expiry <= soon)
+      .map(m => ({ name: m.name, expiry: m.expiry, passed: m.expiry < today }));
+    data.canAddBoss = me.level === '管理者';
+  }
+  return data;
 }
 
 // ===== 書き込み =====
 function need_(clientName) {
   const me = resolveMe_(clientName).me;
-  if (!me) throw new Error('メンバー表に名前がありません。管理者に追加してもらってください。');
+  if (!me) throw new Error('メンバー表に名前がありません。上司に追加してもらってください。');
   return me;
 }
 
@@ -256,25 +417,31 @@ function findRow_(sh, id) {
   return -1;
 }
 
+function taskAt_(sh, row) {
+  const r = sh.getRange(row, 1, 1, COL.kind).getValues()[0];
+  const to = String(r[COL.to - 1]);
+  return { project: String(r[COL.project - 1] || ''), to: to === '全員' ? 'all' : to.split('、').filter(Boolean), from: String(r[COL.from - 1] || '') };
+}
+
 function addTask_(clientName, t) {
   const me = need_(clientName);
-  if (me.role !== '上司' && !BUKA_CAN_CREATE) throw new Error('TODOを出せるのは「メンバー」の人だけです。');
+  if (me.role !== '上司' && !BUKA_CAN_CREATE) throw new Error('TODOを出せるのは上司だけです。');
   const title = safe_(t.title, 200);
   if (!title) throw new Error('「段取り or チェック」を入れてください。');
-  // 宛先にできるのは、一覧に出ている人・自分・グループに入っている人だけ（メンバー＝出す側は、隠した人も選べる）
-  const inGroup = {};
-  groups_().forEach(g => g.members.forEach(n => { inGroup[n] = true; }));
-  const names = members_().filter(m => !m.hidden || me.role === '上司' || m.name === me.name || inGroup[m.name]).map(m => m.name);
-  // 「全員」あては廃止。必ずグループか人を選ぶ（前に出した「全員」あてのTODOは、そのまま表示される）
-  const list = (Array.isArray(t.to) ? t.to : []).filter(n => names.indexOf(n) >= 0);
+  const ms = members_();
+  const sc = scope_(me, ms);
+  // 宛先にできるのは、自分の画面に出る人と、グループに入っている人（社外の人はグループを使えない）
+  const ok = {};
+  visibleMembers_(me, ms, sc).forEach(m => { ok[m.name] = true; });
+  if (me.level !== '社外') groups_().forEach(g => g.members.forEach(n => { if (ms.some(m => m.name === n && !m.stopped)) ok[n] = true; }));
+  const list = (Array.isArray(t.to) ? t.to : []).filter(n => ok[n]);
   if (!list.length) throw new Error('宛先のグループか人を選んでください。');
-  const to = list.join('、');
   if (KINDS.indexOf(t.kind) < 0) throw new Error('種類（確認・お願い・質問）を選んでください。');
   const due = /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? "'" + t.due : '';
   withLock_(() => {
     sheet_(SHEET_TODO).appendRow([
       Utilities.getUuid().slice(0, 8), new Date(), safe_(t.project, 60), title, due,
-      to, safe_(t.group, 40), me.name, '{}', '', '', t.kind
+      list.join('、'), safe_(t.group, 40), me.name, '{}', '', '', t.kind
     ]);
   });
   return getData_(clientName);
@@ -288,7 +455,8 @@ function answer_(clientName, id, v) {
     const row = findRow_(sh, id);
     if (row < 0) throw new Error('このTODOは削除されています。');
     const to = String(sh.getRange(row, COL.to).getValue());
-    if (to !== '全員' && to.split('、').indexOf(me.name) < 0) throw new Error('このTODOはあなた宛ではありません。');
+    const forAll = to === '全員' && me.level !== '社外';
+    if (!forAll && to.split('、').indexOf(me.name) < 0) throw new Error('このTODOはあなた宛ではありません。');
     if (sh.getRange(row, COL.checkedBy).getValue()) throw new Error('完了したTODOです。');
     let a = {};
     try { a = JSON.parse(sh.getRange(row, COL.answers).getValue() || '{}'); } catch (e) { a = {}; }
@@ -304,8 +472,10 @@ function check_(clientName, id, on) {
     const sh = sheet_(SHEET_TODO);
     const row = findRow_(sh, id);
     if (row < 0) throw new Error('このTODOは削除されています。');
-    // 完了✓は、出した本人か上司が押せる
-    if (me.role !== '上司' && String(sh.getRange(row, COL.from).getValue()) !== me.name) throw new Error('完了にできるのは、出した人か「メンバー」の人だけです。');
+    const t = taskAt_(sh, row);
+    // 完了✓は、出した本人か、そのTODOが見えている上司が押せる
+    const ok = t.from === me.name || (me.role === '上司' && canSeeTask_(me, scope_(me, members_()), t));
+    if (!ok) throw new Error('完了にできるのは、出した人か上司だけです。');
     sh.getRange(row, COL.checkedBy, 1, 2).setValues([on ? [me.name, new Date()] : ['', '']]);
   });
   return getData_(clientName);
@@ -313,17 +483,136 @@ function check_(clientName, id, on) {
 
 function deleteTasks_(clientName, ids) {
   const me = need_(clientName);
+  const sc = scope_(me, members_());
   withLock_(() => {
     const sh = sheet_(SHEET_TODO);
     const n = sh.getLastRow() - 1;
     if (n < 1) return;
     const all = sh.getRange(2, 1, n, COL.from).getValues();
-    // 上司は全部、部下は自分が出したものだけ削除できる。下の行から消すと行番号がずれない
+    // 上司は自分に見えているもの、部下・社外は自分が出したものだけ削除できる。下の行から消すと行番号がずれない
     for (let i = all.length - 1; i >= 0; i--) {
       if (ids.indexOf(String(all[i][0])) < 0) continue;
-      if (me.role !== '上司' && String(all[i][COL.from - 1]) !== me.name) continue;
+      const to = String(all[i][COL.to - 1]);
+      const t = { project: String(all[i][COL.project - 1] || ''), to: to === '全員' ? 'all' : to.split('、').filter(Boolean), from: String(all[i][COL.from - 1]) };
+      if (t.from !== me.name && !(me.role === '上司' && canSeeTask_(me, sc, t))) continue;
       sh.deleteRow(i + 2);
     }
   });
+  return getData_(clientName);
+}
+
+// ===== メンバーの追加・招待（上司と管理者） =====
+function needBoss_(clientName) {
+  const me = need_(clientName);
+  if (me.role !== '上司') throw new Error('この操作は上司だけができます。');
+  return me;
+}
+
+/** 操作する相手を探す（自分が扱える人だけ） */
+function target_(me, name) {
+  const ms = members_();
+  const m = ms.find(x => x.name === String(name || '').trim());
+  if (!m) throw new Error('「' + name + '」さんはメンバー表にいません。');
+  if (!manageable_(me, ms, scope_(me, ms)).some(x => x.name === m.name)) throw new Error('「' + m.name + '」さんの設定は変えられません。');
+  return m;
+}
+
+function hashPin_(pin, token) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, pin + ':' + token, Utilities.Charset.UTF_8);
+  return bytes.map(b => ('0' + ((b + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+function newToken_() {
+  return randomCode_(20);
+}
+
+function validPin_(pin) {
+  return /^\d{4}$/.test(String(pin || ''));
+}
+
+/** 新しい人を追加する。追加したら、そのまま招待できるように招待コードを作る */
+function addMember_(clientName, p) {
+  const me = needBoss_(clientName);
+  p = p || {};
+  const name = String(p.name || '').trim().replace(/^[=+\-@]+/, '').slice(0, 40);
+  if (!name) throw new Error('名前を入れてください。');
+  const level = LEVELS.indexOf(p.level) >= 0 ? p.level : '部下';
+  if ((level === '管理者' || level === '上司') && me.level !== '管理者') throw new Error('上司・管理者を追加できるのは、管理者だけです。');
+  let expiry = '';
+  if (level === '社外') {
+    expiry = fmtDate_(p.expiry);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) throw new Error('社外の人は、有効期限を入れてください。');
+    if (expiry < today_()) throw new Error('有効期限が、今日より前になっています。');
+    if (!validPin_(p.pin)) throw new Error('社外の人は、暗証番号（数字4けた）を決めてください。');
+  }
+  if (p.pin && !validPin_(p.pin)) throw new Error('暗証番号は、数字4けたにしてください。');
+  const token = newToken_();
+  withLock_(() => {
+    if (members_().some(m => m.name === name)) throw new Error('「' + name + '」さんは、もういます。同じ名前の人は「' + name + '（会社名）」のように分けてください。');
+    sheet_(SHEET_MEMBER).appendRow([
+      name, '', level, '', safe_(p.teams, 100), safe_(p.projects, 200), expiry ? "'" + expiry : '', '',
+      me.name, "'" + today_(), token, p.pin ? hashPin_(String(p.pin), token) : ''
+    ]);
+  });
+  const data = getData_(clientName);
+  data.invite = { name: name, token: token, hasPin: !!p.pin };
+  return data;
+}
+
+/** 招待URL用のコードを出す（まだなければ作る） */
+function inviteLink_(clientName, name) {
+  const me = needBoss_(clientName);
+  const m = target_(me, name);
+  if (m.stopped) throw new Error('「' + m.name + '」さんは、使えなくしてあります。先に「使えるようにする」を押してください。');
+  let token = m.token;
+  if (!token) {
+    token = newToken_();
+    withLock_(() => { sheet_(SHEET_MEMBER).getRange(m.row, MCOL.token).setValue(token); });
+  }
+  return { name: m.name, token: token, hasPin: !!m.pinHash, level: m.level };
+}
+
+/** 招待URLを作り直す（前のURLは使えなくなる。暗証番号も決め直し） */
+function resetLink_(clientName, name) {
+  const me = needBoss_(clientName);
+  const m = target_(me, name);
+  const token = newToken_();
+  withLock_(() => { sheet_(SHEET_MEMBER).getRange(m.row, MCOL.token, 1, 2).setValues([[token, '']]); });
+  return { name: m.name, token: token, hasPin: false, level: m.level };
+}
+
+/** 暗証番号を決める（空にすると暗証番号なし。社外の人は必ず必要） */
+function setPin_(clientName, name, pin) {
+  const me = needBoss_(clientName);
+  const m = target_(me, name);
+  pin = String(pin || '');
+  if (!pin && m.level === '社外') throw new Error('社外の人は、暗証番号が必要です。');
+  if (pin && !validPin_(pin)) throw new Error('暗証番号は、数字4けたにしてください。');
+  let token = m.token;
+  withLock_(() => {
+    if (!token) token = newToken_();
+    sheet_(SHEET_MEMBER).getRange(m.row, MCOL.token, 1, 2).setValues([[token, pin ? hashPin_(pin, token) : '']]);
+  });
+  return { name: m.name, token: token, hasPin: !!pin, level: m.level };
+}
+
+/** 有効期限を変える（管理者と、その人を追加した上司） */
+function setExpiry_(clientName, name, date) {
+  const me = needBoss_(clientName);
+  const m = target_(me, name);
+  if (!canEditExpiry_(me, m)) throw new Error('有効期限を変えられるのは、管理者と、「' + m.name + '」さんを追加した人だけです。');
+  const d = fmtDate_(date);
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new Error('日付が正しくありません。');
+  if (!date && m.level === '社外') throw new Error('社外の人は、有効期限が必要です。');
+  withLock_(() => { sheet_(SHEET_MEMBER).getRange(m.row, MCOL.expiry).setValue(d ? "'" + d : ''); });
+  return getData_(clientName);
+}
+
+/** 使えなくする・使えるようにする */
+function setStopped_(clientName, name, stop) {
+  const me = needBoss_(clientName);
+  const m = target_(me, name);
+  if (m.name === me.name) throw new Error('自分を使えなくすることはできません。');
+  withLock_(() => { sheet_(SHEET_MEMBER).getRange(m.row, MCOL.status).setValue(stop ? '停止' : ''); });
   return getData_(clientName);
 }

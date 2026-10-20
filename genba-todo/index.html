@@ -152,11 +152,26 @@ button:disabled{opacity:.5;cursor:default}
   .foot{flex-direction:column}
   .foot button,.foot .confirm button{width:100%}
 }
-.share{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
-.qr{background:#fff;padding:10px;border-radius:8px;border:1px solid var(--line);line-height:0}
-.qr img,.qr canvas{width:180px;height:180px}
-.btnlink{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:6px;padding:10px 18px}
-#shareUrl{font-size:12px;color:var(--muted)}
+.sub{display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);padding-top:12px}
+h3{font-size:15px;margin:0}
+.plist{display:flex;flex-direction:column;gap:8px}
+.prow{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.prow.stopped{opacity:.6}
+.pname{font-weight:700}
+.pinfo{font-size:12px;color:var(--muted);flex:1 1 220px;min-width:0;overflow-wrap:anywhere}
+.lv{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:var(--bg);border:1px solid var(--line);white-space:nowrap}
+.lv.ext{background:var(--q-bg);color:var(--q);border-color:transparent}
+.lv.adm{background:var(--ink);color:var(--bg);border-color:transparent}
+.prow .actions input[type=date]{width:auto;padding:6px 8px}
+.invite{border:2px solid var(--accent);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.invite .share{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.invite .qr{background:#fff;padding:10px;border-radius:8px;border:1px solid var(--line);line-height:0}
+.invite .qr img,.invite .qr canvas{width:180px;height:180px}
+.invite .url{font-size:11px;color:var(--muted);overflow-wrap:anywhere;user-select:all;max-height:4.6em;overflow:auto}
+.btnlink{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border-radius:6px;padding:10px 16px}
+.alertbar{border-color:var(--no);background:var(--no-bg);gap:6px}
+.alertbar strong{color:var(--no)}
+summary .badge{margin-left:8px}
 .a2hs{border-color:var(--accent);background:var(--wait-bg)}
 .a2hs b{color:var(--ink)}
 </style>
@@ -196,6 +211,16 @@ button:disabled{opacity:.5;cursor:default}
     </div>
   </div>
 
+  <div class="panel" id="pinPanel" hidden>
+    <h2>暗証番号を入れてください</h2>
+    <span class="who" id="pinWho"></span>
+    <div class="combo">
+      <input type="text" id="pinInput" inputmode="numeric" maxlength="4" autocomplete="one-time-code" placeholder="数字4けた" aria-label="暗証番号">
+      <button type="button" class="primary" id="pinGo">入る</button>
+    </div>
+    <span class="notice" id="pinMsg"></span>
+  </div>
+
   <div class="panel a2hs" id="a2hsPanel" hidden>
     <h2 id="a2hsTitle">ホーム画面に追加しましょう</h2>
     <span id="a2hsText"></span>
@@ -204,6 +229,8 @@ button:disabled{opacity:.5;cursor:default}
 
   <div id="main" hidden>
     <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="panel alertbar" id="alertBar" hidden></div>
+
       <form class="panel" id="addForm" autocomplete="off" hidden>
         <div class="formHead">
           <h2 id="formTitle">新しいTODO</h2>
@@ -276,21 +303,49 @@ button:disabled{opacity:.5;cursor:default}
         </div>
       </details>
 
-      <details class="panel" id="sharePanel" hidden>
-        <summary>みんなを招待する（QRコード・LINE）</summary>
-        <span class="who">このURLを開いた人は、自分の名前を選ぶだけで使えます。URLには合言葉が入っているので、社外には送らないでください。</span>
-        <div class="share">
-          <div id="shareQr" class="qr" aria-label="招待用のQRコード"></div>
-          <div class="field" style="flex:1 1 220px">
-            <span class="l">その場にいる人は</span>
-            <span>携帯のカメラで、左のQRコードを読んでもらいます。</span>
-            <span class="l" style="margin-top:8px">離れている人は</span>
-            <div class="actions">
-              <a class="btnlink primary" id="shareLine" href="#" target="_blank" rel="noopener">LINEで送る</a>
-              <button type="button" id="shareCopy">URLをコピー</button>
+      <details class="panel" id="peoplePanel" hidden>
+        <summary>メンバーの追加・招待<span class="badge" id="alertBadge" hidden></span></summary>
+        <div class="invite" id="inviteCard" hidden></div>
+        <div class="sub">
+          <h3>新しい人を追加</h3>
+          <div class="row">
+            <div class="field">
+              <label class="l" for="npName">名前</label>
+              <input type="text" id="npName" maxlength="40" placeholder="例：山田 太郎">
             </div>
-            <input type="text" id="shareUrl" readonly aria-label="招待用のURL">
+            <div class="field">
+              <label class="l" for="npLevel">役割</label>
+              <select id="npLevel"><option value="部下">部下</option><option value="社外">社外</option></select>
+            </div>
           </div>
+          <div class="row">
+            <div class="field">
+              <label class="l" for="npTeams">チーム（なくてもよい・「、」で区切る）</label>
+              <input type="text" id="npTeams" maxlength="100" placeholder="例：1班">
+            </div>
+            <div class="field">
+              <label class="l" for="npProjects">担当工事（なくてもよい・「、」で区切る）</label>
+              <input type="text" id="npProjects" maxlength="200" placeholder="例：〇〇ビル改修工事">
+            </div>
+          </div>
+          <div class="row" id="npExtRow" hidden>
+            <div class="field">
+              <label class="l" for="npExpiry">有効期限（社外の人は必ず）</label>
+              <input type="date" id="npExpiry">
+            </div>
+            <div class="field">
+              <label class="l" for="npPin">暗証番号（数字4けた・社外の人は必ず）</label>
+              <input type="text" id="npPin" inputmode="numeric" maxlength="4" autocomplete="off">
+            </div>
+          </div>
+          <div class="actions">
+            <button type="button" class="primary" id="npAdd">追加して招待</button>
+            <span class="notice" id="npMsg"></span>
+          </div>
+        </div>
+        <div class="sub">
+          <h3>メンバー一覧</h3>
+          <div class="plist" id="peopleList"></div>
         </div>
       </details>
 
@@ -347,24 +402,34 @@ function el(tag, attrs, ...kids) {
   for (const c of kids.flat()) if (c != null) e.append(c);
   return e;
 }
-// 接続先：アドレスの #api=…&key=… を優先し、この端末にも保存しておく
+// 接続先：アドレスの # の後ろを優先し、この端末にも保存しておく
+//   個人用の招待URL：#api=…&t=招待コード
+//   管理者用のURL  ：#api=…&key=合言葉
 const CONF = (() => {
+  if (window.__TEST_CONF) return window.__TEST_CONF;   // 試験用
   const h = new URLSearchParams(location.hash.slice(1));
-  let api = h.get('api') || '', key = h.get('key') || '';
+  let api = h.get('api') || '', key = h.get('key') || '', t = h.get('t') || '';
   try {
-    if (api && key) localStorage.setItem('genba-conf', JSON.stringify({ api, key }));
-    else ({ api = '', key = '' } = JSON.parse(localStorage.getItem('genba-conf') || '{}'));
+    if (api && (key || t)) localStorage.setItem('genba-conf', JSON.stringify({ api, key, t }));
+    else ({ api = '', key = '', t = '' } = JSON.parse(localStorage.getItem('genba-conf') || '{}'));
   } catch (e) {}
-  return { api, key };
+  let pin = '';
+  try { pin = (t && localStorage.getItem('genba-pin-' + t)) || ''; } catch (e) {}
+  return { api, key, t, pin };
 })();
+function setClientPin(pin) {
+  CONF.pin = pin;
+  try { if (CONF.t) localStorage.setItem('genba-pin-' + CONF.t, pin); } catch (e) {}
+}
 async function call(fn, ...args) {
-  if (!CONF.api || !CONF.key) throw new Error('接続先が設定されていません。管理者から届いたURLを開いてください。');
+  if (!CONF.api || !(CONF.key || CONF.t)) throw new Error('接続先が設定されていません。上司から届いたURLを開いてください。');
+  if (window.__TEST_POST) return window.__TEST_POST({ key: CONF.key, t: CONF.t, pin: CONF.pin, fn, args });   // 試験用
   let res;
   try {
     res = await fetch(CONF.api, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // こうするとブラウザの事前確認が要らない
-      body: JSON.stringify({ key: CONF.key, fn, args })
+      body: JSON.stringify(CONF.t ? { t: CONF.t, pin: CONF.pin, fn, args } : { key: CONF.key, fn, args })
     });
   } catch (e) {
     throw new Error('通信できませんでした。電波のよいところで、もう一度開いてください。');
@@ -374,6 +439,15 @@ async function call(fn, ...args) {
   if (!j.ok) throw new Error(j.error || 'うまくいきませんでした。');
   return j.data;
 }
+// 個人用の招待URL（このページのURL＋接続先＋招待コード）
+function makeInviteUrl(token) {
+  const base = window.__TEST_BASE || (location.origin + location.pathname);   // 試験用の置きかえ
+  return base + '#api=' + encodeURIComponent(CONF.api) + '&t=' + encodeURIComponent(token);
+}
+function drawQr(box, text) {
+  try { new QRCode(box, { text, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }); }
+  catch (e) { box.hidden = true; }
+}
 function showSetup() {
   $('#loading').hidden = true;
   $('#who').textContent = '';
@@ -381,7 +455,7 @@ function showSetup() {
   $('#setApi').value = CONF.api; $('#setKey').value = CONF.key;
   // ホーム画面のアイコンから開いたのに接続先がない（前の版で作ったアイコンなど）
   if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
-    $('#setMsg').textContent = 'このアイコンには接続先が入っていません。アイコンを長押しして削除し、管理者から届いたURLを Safari（Androidは Chrome）で開いてから、もう一度「ホーム画面に追加」をしてください。';
+    $('#setMsg').textContent = 'このアイコンには接続先が入っていません。アイコンを長押しして削除し、上司から届いたURLを Safari（Androidは Chrome）で開いてから、もう一度「ホーム画面に追加」をしてください。';
   }
 }
 $('#setGo').addEventListener('click', () => {
@@ -499,9 +573,11 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/19-A';
+const UI_VERSION = '10/20-A';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
+  if (d.needPin) { showPinPanel(d); return; }
+  $('#pinPanel').hidden = true;
   if (d.me) notifyNew(d);
   data = d;
   $('#loading').hidden = true;
@@ -511,7 +587,8 @@ function apply(d) {
   $('#pickMe').hidden = true;
   $('#main').hidden = false;
   $('#who').textContent = d.me.name;
-  $('#changeMe').hidden = d.byEmail;
+  // 個人用の招待URLで入った人は、名前を変えられない
+  $('#changeMe').hidden = d.byEmail || d.byToken;
   $('#addForm').hidden = !d.canCreate;
   const boss = d.me.role === '上司';
   // 「すべて」を見られるのはメンバー（出す側）だけ。メンバー１は「自分宛」「自分が出した」だけ
@@ -523,6 +600,7 @@ function apply(d) {
   if (!boss && !presetDone) { presetDone = true; presetBosses(); }
   renderPicker();
   render();
+  renderPeople(d);
 }
 function showPick() {
   $('#main').hidden = true;
@@ -550,6 +628,140 @@ $('#pickName').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 $('#changeMe').addEventListener('click', () => {
   try { localStorage.removeItem(KEY); } catch (e) {}
   myName = ''; presetDone = false; knownIds = null; sel.clear(); groupLabel = ''; showPick();
+});
+
+/* ---------- 暗証番号 ---------- */
+function showPinPanel(d) {
+  $('#loading').hidden = true; $('#main').hidden = true; $('#pickMe').hidden = true;
+  $('#pinPanel').hidden = false;
+  $('#who').textContent = '';
+  $('#pinWho').textContent = `${d.pinName} さん、上司から伝えられた暗証番号（数字4けた）を入れてください。最初の1回だけです。`;
+  $('#pinMsg').textContent = d.wrongPin ? '暗証番号がちがいます。もう一度入れてください。' : '';
+  $('#pinInput').value = '';
+}
+function sendPin() {
+  const pin = $('#pinInput').value.trim();
+  if (!/^\d{4}$/.test(pin)) { $('#pinMsg').textContent = '数字4けたで入れてください。'; return; }
+  if (window.setClientPin) setClientPin(pin);
+  $('#pinMsg').textContent = '確かめています…';
+  load();
+}
+$('#pinGo').addEventListener('click', sendPin);
+$('#pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sendPin(); } });
+
+/* ---------- メンバーの追加・招待（上司・管理者） ---------- */
+let inviteOpen = null;   // 今ひらいている招待（名前・招待コード・暗証番号のあり／なし）
+const fmtD = s => s ? s.replace(/-/g, '/') : '';
+function renderPeople(d) {
+  const show = !!(d.me && d.me.role === '上司' && d.people);
+  $('#peoplePanel').hidden = !show;
+  const alerts = show ? (d.alerts || []) : [];
+  $('#alertBadge').hidden = !alerts.length; $('#alertBadge').textContent = alerts.length;
+  $('#alertBar').hidden = !alerts.length;
+  $('#alertBar').replaceChildren(...(alerts.length ? [
+    el('strong', { text: '社外の人の有効期限' }),
+    ...alerts.map(a => el('div', { text: `${a.name} さん：${fmtD(a.expiry)}${a.passed ? '（過ぎています。入れません）' : ' まで'}` })),
+    el('div', { class: 'actions' }, el('button', { type: 'button', text: '期限を見る・変える', on: { click: () => { $('#peoplePanel').open = true; $('#peoplePanel').scrollIntoView({ block: 'start' }); } } }))
+  ] : []));
+  if (!show) return;
+  const levels = d.canAddBoss ? ['部下', '社外', '上司', '管理者'] : ['部下', '社外'];
+  const sel = $('#npLevel');
+  if (sel.dataset.key !== levels.join()) { const v = sel.value; sel.dataset.key = levels.join(); sel.replaceChildren(...levels.map(l => el('option', { value: l, text: l }))); if (levels.includes(v)) sel.value = v; }
+  $('#npExtRow').hidden = sel.value !== '社外';
+  $('#peopleList').replaceChildren(...d.people.map(personRow));
+  if (inviteOpen) renderInvite();
+}
+function personRow(p) {
+  const info = [
+    p.teams.length ? 'チーム：' + p.teams.join('、') : '',
+    p.projects.length ? '工事：' + p.projects.join('、') : '',
+    p.expiry ? '期限：' + fmtD(p.expiry) : '',
+    p.stopped ? '使えなくしてあります' : (p.hasLink ? (p.hasPin ? '招待済み（暗証番号あり）' : '招待済み') : 'まだ招待していません')
+  ].filter(Boolean).join('　');
+  const lvClass = p.level === '社外' ? 'lv ext' : (p.level === '管理者' ? 'lv adm' : 'lv');
+  const acts = el('div', { class: 'actions' });
+  if (!p.stopped) acts.append(el('button', { type: 'button', text: '招待する', on: { click: () => openInvite(p.name, 'inviteLink') } }));
+  if (p.canEditExpiry && p.level === '社外') {
+    const inp = el('input', { type: 'date', value: p.expiry || '', 'aria-label': p.name + 'さんの有効期限' });
+    acts.append(inp, el('button', { type: 'button', text: '期限を変える', on: { click: () => doPeople('setExpiry', [p.name, inp.value], '有効期限を変えました') } }));
+  }
+  if (!p.isMe) {
+    if (pending === 'stop:' + p.name) {
+      acts.append(el('span', { class: 'confirm' }, `${p.name} さんを使えなくしますか？`,
+        el('button', { type: 'button', class: 'danger', text: '使えなくする', on: { click: () => { pending = null; doPeople('setStopped', [p.name, true], '使えなくしました'); } } }),
+        el('button', { type: 'button', text: 'やめる', on: { click: () => { pending = null; renderPeople(data); } } })));
+    } else if (p.stopped) {
+      acts.append(el('button', { type: 'button', text: '使えるようにする', on: { click: () => doPeople('setStopped', [p.name, false], '使えるようにしました') } }));
+    } else {
+      acts.append(el('button', { type: 'button', class: 'ghost', text: '使えなくする', on: { click: () => { pending = 'stop:' + p.name; renderPeople(data); } } }));
+    }
+  }
+  return el('div', { class: 'prow' + (p.stopped ? ' stopped' : '') },
+    el('span', { class: 'pname', text: p.name + (p.isMe ? '（自分）' : '') }),
+    el('span', { class: lvClass, text: p.level }),
+    el('span', { class: 'pinfo', text: info }), acts);
+}
+function doPeople(fn, args, msg) {
+  call(fn, myName, ...args).then(d => { apply(d); toast(msg); }).catch(e => toast(errMsg(e)));
+}
+function openInvite(name, fn) {
+  call(fn, myName, name).then(r => {
+    inviteOpen = r; renderInvite();
+    $('#inviteCard').scrollIntoView({ block: 'start' });
+    if (fn !== 'inviteLink') load();
+  }).catch(e => toast(errMsg(e)));
+}
+function renderInvite() {
+  const r = inviteOpen, card = $('#inviteCard');
+  if (!r) { card.hidden = true; return; }
+  card.hidden = false;
+  const url = window.makeInviteUrl ? makeInviteUrl(r.token) : '';
+  const qr = el('div', { class: 'qr', 'aria-label': r.name + 'さんの招待用QRコード' });
+  const pinInp = el('input', { type: 'text', inputmode: 'numeric', maxlength: '4', placeholder: '数字4けた', 'aria-label': '暗証番号', autocomplete: 'off' });
+  const setPin = pin => call('setPin', myName, r.name, pin).then(x => { inviteOpen = x; renderInvite(); toast(pin ? '暗証番号を決めました' : '暗証番号をなくしました'); load(); }).catch(e => toast(errMsg(e)));
+  const msg = '【現場TODO共有】' + r.name + ' さん専用の招待です。下のURLを開いてください。携帯では、開いたあと「ホーム画面に追加」をしてください。' + (r.hasPin ? '暗証番号は、別に（電話か口頭で）お伝えします。' : '') + '\n' + url;
+  const line = r.hasPin
+    ? el('a', { class: 'btnlink primary', href: 'https://line.me/R/share?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener', text: 'LINEで送る' })
+    : el('button', { type: 'button', text: 'LINEで送る', on: { click: () => toast('LINEで送るときは、先に暗証番号を決めてください') } });
+  const copy = el('button', { type: 'button', text: 'URLをコピー', on: { click: () => {
+    if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => toast('URLをコピーしました')).catch(() => toast('コピーできませんでした。下のURLを長押しでコピーしてください'));
+    else toast('下のURLを長押し（右クリック）でコピーしてください');
+  } } });
+  const resetBtn = pending === 'reset:' + r.name
+    ? el('span', { class: 'confirm' }, '前のURLは使えなくなります。作り直しますか？',
+        el('button', { type: 'button', class: 'danger', text: '作り直す', on: { click: () => { pending = null; openInvite(r.name, 'resetLink'); } } }),
+        el('button', { type: 'button', text: 'やめる', on: { click: () => { pending = null; renderInvite(); } } }))
+    : el('button', { type: 'button', class: 'ghost', text: 'URLを作り直す', on: { click: () => { pending = 'reset:' + r.name; renderInvite(); } } });
+  card.replaceChildren(
+    el('h3', { text: r.name + ' さんへの招待' }),
+    el('span', { class: 'who', text: 'このURLを開くと、' + r.name + ' さんとして自動で入ります。ほかの人には送らないでください。' }),
+    el('div', { class: 'share' }, qr, el('div', { class: 'field', style: 'flex:1 1 220px' },
+      el('span', { class: 'l', text: 'その場にいるときは' }), el('span', { text: '相手の携帯のカメラで、このQRコードを読んでもらいます。' }),
+      el('span', { class: 'l', text: '離れているときは' }),
+      el('div', { class: 'actions' }, line, copy),
+      el('span', { class: 'url', text: url }))),
+    el('div', { class: 'field' },
+      el('span', { class: 'l', text: '暗証番号（数字4けた）' + (r.level === '社外' ? '・社外の人は必ず' : '・LINEで送るときは必ず') }),
+      el('span', { class: 'who', text: r.hasPin ? '暗証番号は決めてあります。忘れたときは、決め直してください。暗証番号は、LINEとは別に、電話か口頭で伝えます。' : 'まだ決めていません。' }),
+      el('div', { class: 'actions' }, pinInp,
+        el('button', { type: 'button', text: r.hasPin ? '暗証番号を決め直す' : '暗証番号を決める', on: { click: () => { const v = pinInp.value.trim(); if (!/^\d{4}$/.test(v)) { toast('数字4けたで入れてください'); return; } setPin(v); } } }),
+        (r.hasPin && r.level !== '社外') ? el('button', { type: 'button', class: 'ghost', text: '暗証番号をなくす', on: { click: () => setPin('') } }) : null)),
+    el('div', { class: 'actions' }, resetBtn, el('button', { type: 'button', text: '閉じる', on: { click: () => { inviteOpen = null; pending = null; renderInvite(); } } })));
+  if (window.drawQr && url) drawQr(qr, url); else qr.hidden = true;
+}
+$('#npLevel').addEventListener('change', () => { $('#npExtRow').hidden = $('#npLevel').value !== '社外'; });
+$('#npAdd').addEventListener('click', () => {
+  const p = { name: $('#npName').value.trim(), level: $('#npLevel').value, teams: $('#npTeams').value.trim(), projects: $('#npProjects').value.trim(), expiry: $('#npExpiry').value, pin: $('#npPin').value.trim() };
+  $('#npMsg').textContent = '';
+  if (!p.name) { $('#npMsg').textContent = '名前を入れてください。'; return; }
+  if (p.level !== '社外') { p.expiry = ''; p.pin = ''; }
+  $('#npAdd').disabled = true;
+  call('addMember', myName, p).then(d => {
+    ['#npName', '#npTeams', '#npProjects', '#npExpiry', '#npPin'].forEach(k => { $(k).value = ''; });
+    inviteOpen = Object.assign({ level: p.level }, d.invite);
+    apply(d); toast(p.name + ' さんを追加しました。招待URLを送ってください');
+    $('#inviteCard').scrollIntoView({ block: 'start' });
+  }).catch(e => { $('#npMsg').textContent = errMsg(e); }).finally(() => { $('#npAdd').disabled = false; });
 });
 
 /* ---------- 宛先の選択 ---------- */
@@ -762,29 +974,6 @@ $('#addForm').addEventListener('submit', e => {
 setInterval(() => { if ((!document.hidden || snd.on) && data && data.me && !pending) load(); }, 30000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && data && data.me) load(); });
 
-// 招待用のURL（このページのURL＋接続先＋合言葉）
-function shareUrl() {
-  return location.origin + location.pathname + '#api=' + encodeURIComponent(CONF.api) + '&key=' + encodeURIComponent(CONF.key);
-}
-let shareDone = false;
-function renderShare(d) {
-  const show = !!(d && d.me && d.me.role === '上司' && CONF.api && CONF.key);
-  $('#sharePanel').hidden = !show;
-  if (!show || shareDone) return;
-  shareDone = true;
-  const url = shareUrl();
-  $('#shareUrl').value = url;
-  const msg = '【現場TODO共有】下のURLを開いて、自分の名前を選んでください。携帯では、開いたあと「ホーム画面に追加」をしてください。\n' + url;
-  $('#shareLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(msg);
-  try { new QRCode($('#shareQr'), { text: url, width: 360, height: 360, correctLevel: QRCode.CorrectLevel.M }); }
-  catch (e) { $('#shareQr').hidden = true; }
-}
-$('#shareCopy').addEventListener('click', () => {
-  const url = $('#shareUrl').value;
-  const done = () => toast('URLをコピーしました');
-  if (navigator.clipboard) navigator.clipboard.writeText(url).then(done).catch(() => { $('#shareUrl').select(); toast('URLを選びました。長押し（右クリック）でコピーしてください'); });
-  else { $('#shareUrl').select(); toast('URLを選びました。長押し（右クリック）でコピーしてください'); }
-});
 // 初めて使う人への案内：ホーム画面に追加（機種ごとに説明を変える）
 function renderA2hs(d) {
   const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
@@ -810,9 +999,9 @@ function renderA2hs(d) {
 }
 $('#a2hsClose').addEventListener('click', () => { try { localStorage.setItem('genba-a2hs', '1'); } catch (e) {} $('#a2hsPanel').hidden = true; });
 const applyBase = apply;
-apply = function (d) { applyBase(d); renderShare(d); renderA2hs(d); };
+apply = function (d) { applyBase(d); renderA2hs(d); };
 
-if (CONF.api && CONF.key) load(); else showSetup();
+if (CONF.api && (CONF.key || CONF.t)) load(); else showSetup();
 </script>
 </body>
 </html>
