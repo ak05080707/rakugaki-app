@@ -342,6 +342,7 @@ summary .badge{margin-left:8px}
         <span id="pushText"></span>
         <div class="actions">
           <button type="button" class="primary" id="pushOn" hidden>通知を受け取る</button>
+          <button type="button" id="pushTest" hidden>自分にテスト通知を送る</button>
           <button type="button" class="ghost" id="pushOff" hidden>この端末で通知をやめる</button>
         </div>
         <span class="who">通知には「新しいTODOが届きました」とだけ出ます。中身はアプリを開いて見てください。</span>
@@ -1202,6 +1203,7 @@ function renderPush(d) {
   $('#pushText').textContent = text;
   $('#pushOn').hidden = !canOn;
   $('#pushOff').hidden = !on;
+  $('#pushTest').hidden = !on;
   // 一度設定した携帯は、開くたびに通知コードが変わっていないか確かめる
   if (on && !pushChecked) {
     pushChecked = true;
@@ -1212,6 +1214,15 @@ function renderPush(d) {
 }
 $('#pushOn').addEventListener('click', enablePush);
 $('#pushOff').addEventListener('click', disablePush);
+// テスト通知：押したあと、アプリを閉じて（ホーム画面に戻って）待つ
+$('#pushTest').addEventListener('click', () => {
+  $('#pushTest').disabled = true;
+  call('testPush', myName).then(r => {
+    if (!r.devices) toast('この名前で通知を受け取る端末がありません。「通知を受け取る」を押してください');
+    else if (r.sent) toast('送りました（' + r.sent + '台）。すぐにホーム画面に戻って、通知が来るか見てください');
+    else toast('送れませんでした。管理者に「checkPush」を実行してもらってください');
+  }).catch(e => toast(errMsg(e))).finally(() => { setTimeout(() => { $('#pushTest').disabled = false; }, 5000); });
+});
 
 const applyBase = apply;
 apply = function (d) { applyBase(d); renderA2hs(d); updateBadge(d); renderPush(d); };

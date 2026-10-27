@@ -12,7 +12,7 @@
  */
 
 // 版（アプリの一番下に出る。貼り付けとデプロイができたかの確認用）
-const VERSION = '10/27-B';
+const VERSION = '10/27-C';
 
 // 画面（GitHub Pages）の場所
 const PAGES_URL = 'https://ak05080707.github.io/rakugaki-app/genba-todo/';
@@ -70,7 +70,7 @@ function doPost(e) {
         getData: getData_, addTask: addTask_, answer: answer_, check: check_, deleteTasks: deleteTasks_,
         addMember: addMember_, inviteLink: inviteLink_, resetLink: resetLink_, setPin: setPin_,
         setExpiry: setExpiry_, setStopped: setStopped_,
-        registerPush: registerPush_, unregisterPush: unregisterPush_, saveWorkMemo: saveWorkMemo_
+        registerPush: registerPush_, unregisterPush: unregisterPush_, saveWorkMemo: saveWorkMemo_, testPush: testPush_
       };
       const fn = fns[req.fn];
       if (!fn) throw new Error('この操作はできません。');
@@ -455,7 +455,7 @@ function addTask_(clientName, t) {
     ]);
   });
   // 宛先の人の携帯に通知する（失敗しても、TODOは出せたことにする）
-  try { notifyNewTask_(list.filter(n => n !== me.name), t.kind); } catch (e) { Logger.log('通知できませんでした：' + e); }
+  try { notifyNewTask_(list.filter(n => n !== me.name), t.kind, me.name, safe_(t.project, 60)); } catch (e) { Logger.log('通知できませんでした：' + e); }
   return getData_(clientName);
 }
 
@@ -467,7 +467,7 @@ function addTask_(clientName, t) {
 function answer_(clientName, id, v) {
   const me = need_(clientName);
   if (['yes', 'no', 'start', 'done', 'move', 'undo'].indexOf(v) < 0) throw new Error('返事が正しくありません。');
-  let allDone = null;
+  let allDone = null, doneProject = '';
   withLock_(() => {
     const sh = sheet_(SHEET_TODO);
     const row = findRow_(sh, id);
@@ -502,13 +502,16 @@ function answer_(clientName, id, v) {
       // 宛先の全員の作業が終わったら、出した人に知らせる（最後の1人が終わったときに1回だけ）
       if ((v === 'done' || v === 'move') && WORK_ENDED.indexOf(prev) < 0) {
         const names = to === '全員' ? [] : to.split('、').filter(Boolean);
-        if (names.length && names.every(n => WORK_ENDED.indexOf(a[n]) >= 0)) allDone = String(sh.getRange(row, COL.from).getValue());
+        if (names.length && names.every(n => WORK_ENDED.indexOf(a[n]) >= 0)) {
+          allDone = String(sh.getRange(row, COL.from).getValue());
+          doneProject = String(sh.getRange(row, COL.project).getValue() || '');
+        }
       }
     }
     sh.getRange(row, COL.answers).setValue(JSON.stringify(a));
   });
   if (allDone && allDone !== me.name) {
-    try { pushTo_([allDone], '作業連絡が、全員「作業終了」になりました。開いて確認してください。'); } catch (e) { Logger.log('通知できませんでした：' + e); }
+    try { pushTo_([allDone], '作業終了の報告', me.name + 'さん' + (doneProject ? '（' + doneProject + '）' : '') + '：全員の作業が終わりました'); } catch (e) { Logger.log('通知できませんでした：' + e); }
   }
   return getData_(clientName);
 }
@@ -742,9 +745,9 @@ function removePushTokens_(tokens) {
   for (let i = rows.length - 1; i >= 0; i--) if (tokens.indexOf(String(rows[i][1])) >= 0) sh.deleteRow(i + 2);
 }
 
-/** 新しいTODOを、宛先の人の携帯に知らせる。中身（文章）は通知に出さない */
-function notifyNewTask_(names, kind) {
-  pushTo_(names, '新しいTODO' + (kind ? '（' + kind + '）' : '') + 'が届きました。開いて確認してください。');
+/** 新しいTODOを、宛先の人の携帯に知らせる。だれから・種類・工事名を出す（TODOの文章は出さない） */
+function notifyNewTask_(names, kind, from, project) {
+  pushTo_(names, '新しい' + (kind || 'TODO'), from + 'さんから' + (project ? '（' + project + '）' : ''));
 }
 
 /** まだ自分がやることが残っているか（アイコンの数字に使う） */
@@ -755,14 +758,22 @@ function waitingFor_(t, name, level) {
   return t.kind === WORK_KIND ? WORK_ENDED.indexOf(t.answers[name]) < 0 && t.answers[name] !== 'no' : !t.answers[name];
 }
 
-/** 決まった人たちの携帯に、文を知らせる */
-function pushTo_(names, body) {
-  if (!names.length || !pushWebConfig_()) return;
+/**
+ * 決まった人たちの携帯に知らせる。
+ * 通知は、携帯（iPhone・Android）の通知の仕組みが直接表示する。閉じていても、携帯の設定どおり音が鳴る
+ */
+function pushTo_(names, title, body) {
+  const result = { devices: 0, sent: 0, failed: 0 };
+  const when = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d H:mm');
+  title = '現場TODO　' + title;
+  body = body + '　' + when;
+  if (!names.length || !pushWebConfig_()) return result;
   const sh = pushSheet_();
   const n = sh.getLastRow() - 1;
-  if (n < 1) return;
+  if (n < 1) return result;
   const rows = sh.getRange(2, 1, n, 2).getValues().filter(r => names.indexOf(String(r[0])) >= 0 && r[1]);
-  if (!rows.length) return;
+  result.devices = rows.length;
+  if (!rows.length) return result;
   // 一人ひとりの「まだ返事をしていない件数」（アイコンの数字にする）
   const tasks = tasks_();
   const levelOf = {};
@@ -778,9 +789,12 @@ function pushTo_(names, body) {
     headers: { Authorization: 'Bearer ' + access },
     payload: JSON.stringify({ message: {
       token: String(r[1]),
-      // 通知の表示は、携帯の中の部品（firebase-messaging-sw.js）が行う
-      data: { title: '現場TODO', body: body, badge: String(counts[r[0]] || 0) },
-      webpush: { headers: { Urgency: 'high', TTL: '86400' } }
+      data: { title: title, body: body, badge: String(counts[r[0]] || 0) },
+      webpush: {
+        headers: { Urgency: 'high', TTL: '86400' },
+        notification: { title: title, body: body, icon: PAGES_URL + 'icons/icon-192.png', tag: 'genba-todo-' + new Date().getTime() },
+        fcm_options: { link: PAGES_URL }
+      }
     } })
   }));
   const res = UrlFetchApp.fetchAll(reqs);
@@ -788,9 +802,18 @@ function pushTo_(names, body) {
   const dead = [];
   res.forEach((r, i) => {
     const code = r.getResponseCode();
+    if (code === 200) result.sent++; else { result.failed++; Logger.log('通知の失敗（' + rows[i][0] + '）：' + code + ' ' + r.getContentText()); }
     if (code === 404 || (code === 400 && /UNREGISTERED|registration-token/i.test(r.getContentText()))) dead.push(String(rows[i][1]));
   });
   if (dead.length) withLock_(() => removePushTokens_(dead));
+  return result;
+}
+
+/** 自分の端末に、テストの通知を送る（届くか確かめる用） */
+function testPush_(clientName) {
+  const me = need_(clientName);
+  if (!pushWebConfig_()) throw new Error('通知の設定（Firebase）がまだです。管理者に伝えてください。');
+  return pushTo_([me.name], 'テスト', 'これはテストの通知です');
 }
 
 /** Firebase に通知を頼むための、一時的な入館証（50分使い回す） */

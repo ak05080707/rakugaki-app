@@ -18,6 +18,8 @@ if (cfg.apiKey) {
     try {
       if (self.navigator.setAppBadge) (n ? self.navigator.setAppBadge(n) : self.navigator.clearAppBadge()).catch(() => {});
     } catch (e) {}
+    // 通知の文は、携帯の通知の仕組みが表示する（二重に出さない）
+    if (payload && payload.notification) return;
     return self.registration.showNotification(d.title || '現場TODO', {
       body: d.body || '新しいTODOが届きました。',
       icon: 'icons/icon-192.png',
