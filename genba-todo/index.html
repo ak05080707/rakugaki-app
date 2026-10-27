@@ -55,6 +55,9 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .work.fin{background:var(--yes);border-color:var(--yes);color:#fff}
 .work.move{background:var(--q);border-color:var(--q);color:#fff}
 .memobox{display:flex;flex-direction:column;gap:6px}
+.reportseg{display:grid !important;grid-template-columns:1fr 1fr;width:100%}
+.reportseg button{min-height:46px;font-size:15px;border:1px solid var(--line) !important}
+.rclock{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0}
 .reportbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .reportbtns .work{min-height:52px;font-size:16px}
 .reportbtns .work.move{grid-column:1 / -1}
@@ -295,8 +298,14 @@ summary .badge{margin-left:8px}
             <input type="text" id="tTitle" maxlength="200" placeholder="例：足場の点検（写真を提出）">
           </div>
           <div class="field" id="reportMemoField" hidden>
-            <label class="l" for="rMemo">作業内容（なくてもよい）</label>
-            <textarea id="rMemo" class="memoin" rows="2" maxlength="300" placeholder="例：タイル貼り、清掃片付けまで"></textarea>
+            <span class="l">作業内容　<span class="rclock" id="rClock"></span></span>
+            <div class="seg reportseg" role="group" aria-label="作業内容" id="reportSeg">
+              <button type="button" data-report="作業開始" aria-pressed="true">作業開始</button>
+              <button type="button" data-report="作業終了" aria-pressed="false">作業終了</button>
+              <button type="button" data-report="次の現場に向かいます" aria-pressed="false">次の現場に向かいます</button>
+              <button type="button" data-report="" aria-pressed="false">その他</button>
+            </div>
+            <textarea id="rMemo" class="memoin" rows="2" maxlength="300" placeholder="空欄：自由に書けます（例：タイル貼り、清掃片付けまで）" aria-label="作業内容（自由に書く）"></textarea>
           </div>
           <div class="field">
             <span class="l">宛先（グループか人を選ぶ）</span>
@@ -307,13 +316,8 @@ summary .badge{margin-left:8px}
               <div class="people" id="memberBtns"></div>
             </div>
           </div>
-          <div class="actions" id="normalBtns">
+          <div class="actions">
             <button class="primary" type="submit" id="addBtn">TODOを出す</button>
-          </div>
-          <div class="reportbtns" id="reportBtns" hidden>
-            <button type="button" class="work go" data-report="作業開始">作業開始</button>
-            <button type="button" class="work fin" data-report="作業終了">作業終了</button>
-            <button type="button" class="work move" data-report="次の現場に向かいます">次の現場に向かいます</button>
           </div>
           <span class="notice" id="formMsg"></span>
         </div>
@@ -633,7 +637,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-D';
+const UI_VERSION = '10/27-E';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -657,7 +661,7 @@ function apply(d) {
   allBtn.hidden = !boss;
   if (lastRole !== d.me.role) { lastRole = d.me.role; setView(boss ? 'all' : 'mine'); }
   $('#formTitle').textContent = boss ? '新しいTODO' : 'メンバーへ依頼を出す';
-  if (!$('#addBtn').disabled) $('#addBtn').textContent = boss ? 'TODOを出す' : '依頼を出す';
+  if (!$('#addBtn').disabled) $('#addBtn').textContent = formKind === WORK_KIND ? '連絡する' : (boss ? 'TODOを出す' : '依頼を出す');
   if (!boss && !presetDone) { presetDone = true; presetBosses(); }
   renderPicker();
   render();
@@ -912,25 +916,41 @@ document.querySelectorAll('#kindSeg [data-kind]').forEach(b => b.addEventListene
   setReportMode(formKind === WORK_KIND);
 }));
 // 作業連絡：段取りの欄の代わりに、作業内容の欄と「作業開始・作業終了・次の現場に向かいます」を出す
+let reportSel = '作業開始';
+// 作業内容の欄に、今の日にちと時間を出す（連絡したときの時刻が残る）
+const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+function tickClock() {
+  const d = new Date();
+  $('#rClock').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+tickClock(); setInterval(tickClock, 15000);
 function setReportMode(on) {
-  $('#titleField').hidden = on; $('#normalBtns').hidden = on;
-  $('#reportMemoField').hidden = !on; $('#reportBtns').hidden = !on;
+  $('#titleField').hidden = on;
+  $('#reportMemoField').hidden = !on;
+  if (!$('#addBtn').disabled) $('#addBtn').textContent = on ? '連絡する' : (data && data.me && data.me.role === '上司' ? 'TODOを出す' : '依頼を出す');
   $('#tDue').closest('.field').hidden = on;
   // 宛先がまだ空なら、上司を入れておく
   if (on && !sel.size && data && data.members) { bossNames().forEach(n => sel.add(n)); groupLabel = 'メンバー'; renderPicker(); }
 }
-document.querySelectorAll('#reportBtns [data-report]').forEach(b => b.addEventListener('click', () => {
-  const report = b.dataset.report;
+document.querySelectorAll('#reportSeg [data-report]').forEach(b => b.addEventListener('click', () => {
+  reportSel = b.dataset.report;
+  document.querySelectorAll('#reportSeg [data-report]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  if (!reportSel) $('#rMemo').focus();
+}));
+// 作業連絡を送る（「連絡する」を押したとき）
+function sendReport() {
   const msg = $('#formMsg'); msg.textContent = '';
   const to = [...sel];
   if (!to.length) { msg.textContent = '連絡する相手（宛先）を選んでください。'; return; }
   const memo = $('#rMemo').value.trim();
-  document.querySelectorAll('#reportBtns button').forEach(x => { x.disabled = true; });
-  call('addTask', myName, { title: report + (memo ? '：' + memo : ''), project: $('#tProj').value.trim(), due: '', to, group: groupLabel, kind: WORK_KIND, report })
-    .then(d => { $('#rMemo').value = ''; apply(d); toast('「' + report + '」を連絡しました（' + hm(Date.now()) + '）'); })
+  if (!reportSel && !memo) { msg.textContent = '「その他」のときは、空欄に作業内容を書いてください。'; return; }
+  const title = reportSel ? reportSel + (memo ? '：' + memo : '') : memo;
+  $('#addBtn').disabled = true; $('#addBtn').textContent = '送信中…';
+  call('addTask', myName, { title, project: $('#tProj').value.trim(), due: '', to, group: groupLabel, kind: WORK_KIND, report: reportSel })
+    .then(d => { $('#rMemo').value = ''; apply(d); toast('「' + (reportSel || '作業連絡') + '」を連絡しました（' + hm(Date.now()) + '）'); })
     .catch(err => { msg.textContent = errMsg(err); })
-    .finally(() => { document.querySelectorAll('#reportBtns button').forEach(x => { x.disabled = false; }); });
-}));
+    .finally(() => { $('#addBtn').disabled = false; $('#addBtn').textContent = '連絡する'; });
+}
 function renderKinds() {
   const waiting = data.tasks.filter(needsMe);
   const total = waiting.length;
@@ -1100,6 +1120,7 @@ $('#tProjSel').addEventListener('change', e => {
 /* ---------- 追加 ---------- */
 $('#addForm').addEventListener('submit', e => {
   e.preventDefault();
+  if (formKind === WORK_KIND) { sendReport(); return; }
   const msg = $('#formMsg'); msg.textContent = '';
   const title = $('#tTitle').value.trim();
   if (!title) { msg.textContent = '「段取り or チェック」を入れてください。'; return; }
@@ -1113,7 +1134,7 @@ $('#addForm').addEventListener('submit', e => {
       apply(d); toast(d.me && d.me.role !== '上司' ? '依頼を出しました' : 'TODOを出しました');
     })
     .catch(err => { msg.textContent = errMsg(err); })
-    .finally(() => { $('#addBtn').disabled = false; $('#addBtn').textContent = data.me.role === '上司' ? 'TODOを出す' : '依頼を出す'; });
+    .finally(() => { $('#addBtn').disabled = false; $('#addBtn').textContent = formKind === WORK_KIND ? '連絡する' : (data.me.role === '上司' ? 'TODOを出す' : '依頼を出す'); });
 });
 
 /* ---------- 自動更新（30秒ごと・画面を開き直したとき） ---------- */
