@@ -49,6 +49,11 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .tag.k1{background:var(--yes-bg);color:var(--yes)}
 .tag.k2{background:var(--ask-bg);color:var(--ask)}
 .tag.k3{background:var(--q-bg);color:var(--q)}
+.tag.k4{background:var(--wait-bg);color:var(--wait);border:1px solid var(--wait)}
+.work{min-width:110px;font-weight:700}
+.work.go{background:var(--ask);border-color:var(--ask);color:#fff}
+.work.fin{background:var(--yes);border-color:var(--yes);color:#fff}
+.worknote{font-size:13px;font-weight:700}
 .badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--no);color:#fff;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .seg .badge{margin-left:6px;min-width:20px;height:20px;font-size:12px}
 .kinds{display:flex;flex-wrap:wrap;gap:12px;padding-top:8px}
@@ -137,8 +142,8 @@ button:disabled{opacity:.5;cursor:default}
   .seg{display:flex;width:100%}
   .seg button{flex:1 1 0;font-size:14px;padding-inline:4px;white-space:nowrap}
   .panel{padding:14px}
-  .kinds{gap:14px}
-  .kind{flex:1 1 0;padding-inline:6px;min-height:48px}
+  .kinds{gap:8px}
+  .kind{flex:1 1 0;padding-inline:2px;min-height:44px;font-size:13px;white-space:nowrap}
   .chips{flex-wrap:nowrap;overflow-x:auto;margin-inline:-16px;padding:2px 16px 6px;scrollbar-width:none}
   .chip{flex:0 0 auto;min-height:38px}
   .title{font-size:18px}
@@ -274,6 +279,7 @@ summary .badge{margin-left:8px}
               <button type="button" data-kind="確認" aria-pressed="true">確認</button>
               <button type="button" data-kind="お願い" aria-pressed="false">お願い</button>
               <button type="button" data-kind="質問" aria-pressed="false">質問</button>
+              <button type="button" data-kind="作業連絡" aria-pressed="false">作業連絡</button>
             </div>
           </div>
           <div class="field">
@@ -609,7 +615,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/20-A';
+const UI_VERSION = '10/27-A';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -854,6 +860,14 @@ function short(names, max) {
 function statusOf(t) {
   if (isDone(t)) return ['p-yes', '完了 ✓'];
   const a = t.answers, R = recips(t);
+  if (t.kind === WORK_KIND && R) {
+    const vals = R.map(n => a[n]);
+    if (vals.includes('no')) return ['p-no', '別途確認あり'];
+    const fin = vals.filter(v => v === 'done').length, go = vals.filter(v => v === 'start').length;
+    if (fin === R.length) return ['p-yes', R.length > 1 ? '全員作業完了・完了待ち' : '作業完了・完了待ち'];
+    if (R.length > 1) return [fin || go ? 'p-wait' : 'p-wait', `作業完了 ${fin}/${R.length}`];
+    return ['p-wait', go ? '作業中' : 'まだ作業前'];
+  }
   if (R) {
     const vals = R.map(n => a[n]);
     if (vals.includes('no')) return ['p-no', '別途確認あり'];
@@ -866,11 +880,13 @@ function statusOf(t) {
   return vals.length ? ['p-wait', `確認済み ${vals.length}人・完了待ち`] : ['p-wait', '返事待ち'];
 }
 // 種類（確認・お願い・質問）
-const KINDS = ['確認', 'お願い', '質問'];
+const KINDS = ['確認', 'お願い', '質問', '作業連絡'];
+const WORK_KIND = '作業連絡';
+const hm = ms => { if (!ms) return ''; const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); };
 let formKind = '確認', kindFilter = '';
 const isMine = t => { const R = recips(t); return !R || R.includes(myName); };
 // 自分あてで、まだ自分が返事をしていないもの（＝今、来ているもの）
-const needsMe = t => isMine(t) && !isDone(t) && !t.answers[myName];
+const needsMe = t => isMine(t) && !isDone(t) && (t.kind === WORK_KIND ? t.answers[myName] !== 'done' && t.answers[myName] !== 'no' : !t.answers[myName]);
 document.querySelectorAll('#kindSeg [data-kind]').forEach(b => b.addEventListener('click', () => {
   formKind = b.dataset.kind;
   document.querySelectorAll('#kindSeg [data-kind]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
@@ -934,21 +950,41 @@ function card(t) {
   const yesN = pool.filter(n => a[n] === 'yes'), noN = pool.filter(n => a[n] === 'no');
   const waitN = R ? R.filter(n => !a[n]) : [];
   const ans = el('div', { class: 'answers' });
+  const isWork = t.kind === WORK_KIND;
+  const w = t.work || {};
+  if (isWork) {
+    // 作業連絡：だれが作業中・作業完了か（時刻つき）
+    const goN = pool.filter(n => a[n] === 'start'), finN = pool.filter(n => a[n] === 'done');
+    const withTime = (list, key) => list.map(n => n + (w[n] && w[n][key] ? '（' + hm(w[n][key]) + '）' : '')).join('、');
+    if (finN.length) ans.append(el('div', {}, el('span', { class: 'y', text: `作業完了 ${finN.length}人：` }), withTime(finN, 'done')));
+    if (goN.length) ans.append(el('div', {}, el('span', { class: 'w', text: `作業中 ${goN.length}人：` }), withTime(goN, 'start')));
+  }
   if (yesN.length) ans.append(el('div', {}, el('span', { class: 'y', text: `確認済み ${yesN.length}人：` }), short(yesN, 8)));
   if (noN.length) ans.append(el('div', {}, el('span', { class: 'n', text: `別途確認 ${noN.length}人：` }), short(noN, 8)));
-  if (waitN.length && R.length > 1 && !done) ans.append(el('div', {}, el('span', { class: 'w', text: `未回答 ${waitN.length}人：` }), short(waitN, 8)));
+  if (waitN.length && (R.length > 1 || isWork) && !done) ans.append(el('div', {}, el('span', { class: 'w', text: (isWork ? 'まだ作業前 ' : '未回答 ') + waitN.length + '人：' }), short(waitN, 8)));
   if (done) ans.append(el('div', { text: '完了にした人：' + t.checkedBy }));
 
   const acts = el('div', { class: 'actions' });
   if ((!R || R.includes(myName)) && !done) {
     const mine = a[myName];
     const answer = v => () => {
-      t.answers = Object.assign({}, a, { [myName]: v }); render();   // 先に画面へ反映
-      call('answer', myName, t.id, v).then(apply).catch(e => { toast(errMsg(e)); load(); });
+      if (v !== 'undo') { t.answers = Object.assign({}, a, { [myName]: v }); render(); }   // 先に画面へ反映
+      call('answer', myName, t.id, v).then(d => { apply(d); if (v === 'start') toast('作業開始を知らせました'); if (v === 'done') toast('作業完了を知らせました'); }).catch(e => { toast(errMsg(e)); load(); });
     };
-    acts.append(
-      el('button', { type: 'button', class: 'yes', 'aria-pressed': String(mine === 'yes'), text: '確認済み', on: { click: answer('yes') } }),
-      el('button', { type: 'button', class: 'no', 'aria-pressed': String(mine === 'no'), on: { click: answer('no') } }, '別途確認', el('small', { text: '（ライン or TEL）' })));
+    const noBtn = el('button', { type: 'button', class: 'no', 'aria-pressed': String(mine === 'no'), on: { click: answer('no') } }, '別途確認', el('small', { text: '（ライン or TEL）' }));
+    if (!isWork) {
+      acts.append(
+        el('button', { type: 'button', class: 'yes', 'aria-pressed': String(mine === 'yes'), text: '確認済み', on: { click: answer('yes') } }), noBtn);
+    } else if (mine === 'done') {
+      acts.append(el('span', { class: 'worknote', text: '作業完了（' + hm(w[myName] && w[myName].done) + '）' }),
+        el('button', { type: 'button', class: 'ghost', text: '作業完了を取り消す', on: { click: answer('undo') } }));
+    } else if (mine === 'start') {
+      acts.append(el('button', { type: 'button', class: 'work fin', text: '作業完了', on: { click: answer('done') } }),
+        el('span', { class: 'worknote', text: '作業中（' + hm(w[myName] && w[myName].start) + '〜）' }),
+        el('button', { type: 'button', class: 'ghost', text: '作業開始を取り消す', on: { click: answer('undo') } }));
+    } else {
+      acts.append(el('button', { type: 'button', class: 'work go', text: '作業開始', on: { click: answer('start') } }), noBtn);
+    }
   }
   acts.append(el('span', { class: 'spacer' }));
   if (isBoss || mineSent) {

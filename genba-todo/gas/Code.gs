@@ -12,7 +12,7 @@
  */
 
 // 版（アプリの一番下に出る。貼り付けとデプロイができたかの確認用）
-const VERSION = '10/21-A';
+const VERSION = '10/27-A';
 
 // 画面（GitHub Pages）の場所
 const PAGES_URL = 'https://ak05080707.github.io/rakugaki-app/genba-todo/';
@@ -26,14 +26,15 @@ const SHEET_TODO = 'TODO';
 const SHEET_MEMBER = 'メンバー';
 const MEMBER_ALIASES = ['メンバー', 'メンバー１', 'メンバー1']; // どの名前のタブでも読めるようにする
 const SHEET_GROUP = 'グループ';
-const TODO_HEAD = ['ID', '作成日時', '工事名', '段取り or チェック', '期限', '宛先', 'グループ名', '出した人', '返事', '確認者', '確認日時', '種類'];
-const KINDS = ['確認', 'お願い', '質問'];
+const TODO_HEAD = ['ID', '作成日時', '工事名', '段取り or チェック', '期限', '宛先', 'グループ名', '出した人', '返事', '確認者', '確認日時', '種類', '作業の時刻（さわらない）'];
+const KINDS = ['確認', 'お願い', '質問', '作業連絡'];
+const WORK_KIND = '作業連絡';   // この種類だけ「作業開始」「作業完了」で返事をする
 const LEVELS = ['管理者', '上司', '部下', '社外'];
 const MEMBER_HEAD = ['名前', 'メールアドレス（任意）', '役割（管理者/上司/部下/社外）', '一覧に出さない（○を入れる）',
   'チーム（「、」で区切る）', '担当工事（「、」で区切る）', '有効期限（社外の人）', '状態（停止）',
   '追加した人', '追加した日', '招待コード（さわらない）', '暗証番号（さわらない）'];
 const GROUP_HEAD = ['グループ名', 'メンバー（名前を「、」で区切る）'];
-const COL = { id: 1, created: 2, project: 3, title: 4, due: 5, to: 6, group: 7, from: 8, answers: 9, checkedBy: 10, checkedAt: 11, kind: 12 };
+const COL = { id: 1, created: 2, project: 3, title: 4, due: 5, to: 6, group: 7, from: 8, answers: 9, checkedBy: 10, checkedAt: 11, kind: 12, work: 13 };
 const MCOL = { name: 1, email: 2, level: 3, hidden: 4, teams: 5, projects: 6, expiry: 7, status: 8, addedBy: 9, addedAt: 10, token: 11, pin: 12 };
 
 // このリクエストで、だれが使っているか（doPost の最初に決める）
@@ -153,6 +154,7 @@ function setup() {
   const td = ensureSheet_(ss, SHEET_TODO, TODO_HEAD);
   // あとから増えた列（種類）の見出しを足す
   if (!String(td.getRange(1, COL.kind).getValue()).trim()) td.getRange(1, COL.kind).setValue('種類').setFontWeight('bold');
+  if (!String(td.getRange(1, COL.work).getValue()).trim()) td.getRange(1, COL.work).setValue(TODO_HEAD[COL.work - 1]).setFontWeight('bold');
   const m = memberSheet_(ss) || ensureSheet_(ss, SHEET_MEMBER, MEMBER_HEAD);
   if (m.getLastRow() < 2) m.appendRow(['（例）山田 太郎', '', '管理者']);
   // あとから増えた列の見出しを足す（すでに何か書いてある見出しは変えない）
@@ -253,6 +255,10 @@ function addDays_(ymd, n) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
+function parseJson_(v) {
+  try { return v ? JSON.parse(v) : {}; } catch (e) { return {}; }
+}
+
 function tasks_() {
   return rows_(SHEET_TODO).filter(r => r[0]).map(r => {
     let answers = {};
@@ -269,7 +275,8 @@ function tasks_() {
       from: String(r[COL.from - 1] || ''),
       answers: answers,
       checkedBy: String(r[COL.checkedBy - 1] || ''),
-      kind: String(r[COL.kind - 1] || '')
+      kind: String(r[COL.kind - 1] || ''),
+      work: parseJson_(r[COL.work - 1])   // { 名前: { start: 時刻, done: 時刻 } }
     };
   });
 }
@@ -438,12 +445,12 @@ function addTask_(clientName, t) {
   if (me.level !== '社外') groups_().forEach(g => g.members.forEach(n => { if (ms.some(m => m.name === n && !m.stopped)) ok[n] = true; }));
   const list = (Array.isArray(t.to) ? t.to : []).filter(n => ok[n]);
   if (!list.length) throw new Error('宛先のグループか人を選んでください。');
-  if (KINDS.indexOf(t.kind) < 0) throw new Error('種類（確認・お願い・質問）を選んでください。');
+  if (KINDS.indexOf(t.kind) < 0) throw new Error('種類（確認・お願い・質問・作業連絡）を選んでください。');
   const due = /^\d{4}-\d{2}-\d{2}$/.test(t.due || '') ? "'" + t.due : '';
   withLock_(() => {
     sheet_(SHEET_TODO).appendRow([
       Utilities.getUuid().slice(0, 8), new Date(), safe_(t.project, 60), title, due,
-      list.join('、'), safe_(t.group, 40), me.name, '{}', '', '', t.kind
+      list.join('、'), safe_(t.group, 40), me.name, '{}', '', '', t.kind, '{}'
     ]);
   });
   // 宛先の人の携帯に通知する（失敗しても、TODOは出せたことにする）
@@ -451,9 +458,15 @@ function addTask_(clientName, t) {
   return getData_(clientName);
 }
 
+/**
+ * 返事をする。
+ *   確認・お願い・質問 … yes（確認済み）／ no（別途確認）
+ *   作業連絡           … start（作業開始）／ done（作業完了）／ no（別途確認）／ undo（ひとつ前に戻す）
+ */
 function answer_(clientName, id, v) {
   const me = need_(clientName);
-  if (v !== 'yes' && v !== 'no') throw new Error('返事が正しくありません。');
+  if (['yes', 'no', 'start', 'done', 'undo'].indexOf(v) < 0) throw new Error('返事が正しくありません。');
+  let allDone = null;
   withLock_(() => {
     const sh = sheet_(SHEET_TODO);
     const row = findRow_(sh, id);
@@ -462,11 +475,37 @@ function answer_(clientName, id, v) {
     const forAll = to === '全員' && me.level !== '社外';
     if (!forAll && to.split('、').indexOf(me.name) < 0) throw new Error('このTODOはあなた宛ではありません。');
     if (sh.getRange(row, COL.checkedBy).getValue()) throw new Error('完了したTODOです。');
-    let a = {};
-    try { a = JSON.parse(sh.getRange(row, COL.answers).getValue() || '{}'); } catch (e) { a = {}; }
-    a[me.name] = v;
+    const a = parseJson_(sh.getRange(row, COL.answers).getValue());
+    const kind = String(sh.getRange(row, COL.kind).getValue());
+    const isWork = kind === WORK_KIND;
+    if (!isWork && (v === 'start' || v === 'done' || v === 'undo')) throw new Error('作業開始・作業完了は、「作業連絡」のTODOだけです。');
+    if (isWork && v === 'yes') throw new Error('作業連絡のTODOは、「作業開始」「作業完了」で返事をしてください。');
+    if (!isWork) {
+      a[me.name] = v;
+    } else {
+      const w = parseJson_(sh.getRange(row, COL.work).getValue());
+      const mine = w[me.name] || {};
+      const now = new Date().getTime();
+      if (v === 'start') { a[me.name] = 'start'; mine.start = mine.start || now; delete mine.done; }
+      else if (v === 'done') { a[me.name] = 'done'; mine.start = mine.start || now; mine.done = now; }
+      else if (v === 'no') { a[me.name] = 'no'; }
+      else {   // undo：作業完了 → 作業中、作業中 → まだ
+        if (a[me.name] === 'done') { a[me.name] = 'start'; delete mine.done; }
+        else { delete a[me.name]; delete mine.start; delete mine.done; }
+      }
+      if (mine.start || mine.done) w[me.name] = mine; else delete w[me.name];
+      sh.getRange(row, COL.work).setValue(JSON.stringify(w));
+      // 宛先の全員が作業完了になったら、出した人に知らせる
+      if (v === 'done') {
+        const names = to === '全員' ? [] : to.split('、').filter(Boolean);
+        if (names.length && names.every(n => a[n] === 'done')) allDone = String(sh.getRange(row, COL.from).getValue());
+      }
+    }
     sh.getRange(row, COL.answers).setValue(JSON.stringify(a));
   });
+  if (allDone && allDone !== me.name) {
+    try { pushTo_([allDone], '作業連絡が、全員「作業完了」になりました。開いて確認してください。'); } catch (e) { Logger.log('通知できませんでした：' + e); }
+  }
   return getData_(clientName);
 }
 
@@ -680,6 +719,19 @@ function removePushTokens_(tokens) {
 
 /** 新しいTODOを、宛先の人の携帯に知らせる。中身（文章）は通知に出さない */
 function notifyNewTask_(names, kind) {
+  pushTo_(names, '新しいTODO' + (kind ? '（' + kind + '）' : '') + 'が届きました。開いて確認してください。');
+}
+
+/** まだ自分がやることが残っているか（アイコンの数字に使う） */
+function waitingFor_(t, name, level) {
+  if (t.checkedBy) return false;
+  const mine = t.to === 'all' ? level !== '社外' : t.to.indexOf(name) >= 0;
+  if (!mine) return false;
+  return t.kind === WORK_KIND ? t.answers[name] !== 'done' && t.answers[name] !== 'no' : !t.answers[name];
+}
+
+/** 決まった人たちの携帯に、文を知らせる */
+function pushTo_(names, body) {
   if (!names.length || !pushWebConfig_()) return;
   const sh = pushSheet_();
   const n = sh.getLastRow() - 1;
@@ -690,8 +742,7 @@ function notifyNewTask_(names, kind) {
   const tasks = tasks_();
   const levelOf = {};
   members_().forEach(m => { levelOf[m.name] = m.level; });
-  const waiting = name => tasks.filter(t => !t.checkedBy && !t.answers[name] &&
-    (t.to === 'all' ? levelOf[name] !== '社外' : t.to.indexOf(name) >= 0)).length;
+  const waiting = name => tasks.filter(t => waitingFor_(t, name, levelOf[name])).length;
   const counts = {};
   names.forEach(nm => { counts[nm] = waiting(nm); });
   const sa = JSON.parse(PropertiesService.getScriptProperties().getProperty('FCM_SERVICE_ACCOUNT'));
@@ -703,7 +754,7 @@ function notifyNewTask_(names, kind) {
     payload: JSON.stringify({ message: {
       token: String(r[1]),
       // 通知の表示は、携帯の中の部品（firebase-messaging-sw.js）が行う
-      data: { title: '現場TODO', body: '新しいTODO' + (kind ? '（' + kind + '）' : '') + 'が届きました。開いて確認してください。', badge: String(counts[r[0]] || 0) },
+      data: { title: '現場TODO', body: body, badge: String(counts[r[0]] || 0) },
       webpush: { headers: { Urgency: 'high', TTL: '86400' } }
     } })
   }));
