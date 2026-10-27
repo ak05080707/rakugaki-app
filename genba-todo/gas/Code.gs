@@ -12,7 +12,7 @@
  */
 
 // 版（アプリの一番下に出る。貼り付けとデプロイができたかの確認用）
-const VERSION = '10/27-C';
+const VERSION = '10/27-D';
 
 // 画面（GitHub Pages）の場所
 const PAGES_URL = 'https://ak05080707.github.io/rakugaki-app/genba-todo/';
@@ -30,6 +30,7 @@ const TODO_HEAD = ['ID', '作成日時', '工事名', '段取り or チェック
 const KINDS = ['確認', 'お願い', '質問', '作業連絡'];
 const WORK_KIND = '作業連絡';   // この種類だけ「作業開始」「作業終了」「次の現場に向かいます」で返事をする
 const WORK_ENDED = ['done', 'move'];   // 作業終了・次の現場へ（＝作業は終わっている）
+const REPORTS = ['作業開始', '作業終了', '次の現場に向かいます'];   // 作業連絡（現場からの報告）のボタン
 const LEVELS = ['管理者', '上司', '部下', '社外'];
 const MEMBER_HEAD = ['名前', 'メールアドレス（任意）', '役割（管理者/上司/部下/社外）', '一覧に出さない（○を入れる）',
   'チーム（「、」で区切る）', '担当工事（「、」で区切る）', '有効期限（社外の人）', '状態（停止）',
@@ -455,7 +456,8 @@ function addTask_(clientName, t) {
     ]);
   });
   // 宛先の人の携帯に通知する（失敗しても、TODOは出せたことにする）
-  try { notifyNewTask_(list.filter(n => n !== me.name), t.kind, me.name, safe_(t.project, 60)); } catch (e) { Logger.log('通知できませんでした：' + e); }
+  const report = t.kind === WORK_KIND && REPORTS.indexOf(t.report) >= 0 ? t.report : '';
+  try { notifyNewTask_(list.filter(n => n !== me.name), t.kind, me.name, safe_(t.project, 60), report); } catch (e) { Logger.log('通知できませんでした：' + e); }
   return getData_(clientName);
 }
 
@@ -480,8 +482,7 @@ function answer_(clientName, id, v) {
     const kind = String(sh.getRange(row, COL.kind).getValue());
     const isWork = kind === WORK_KIND;
     if (!isWork && ['start', 'done', 'move', 'undo'].indexOf(v) >= 0) throw new Error('作業開始・作業終了は、「作業連絡」のTODOだけです。');
-    if (isWork && v === 'yes') throw new Error('作業連絡のTODOは、「作業開始」「作業終了」で返事をしてください。');
-    if (!isWork) {
+    if (!isWork || v === 'yes' || v === 'no') {
       a[me.name] = v;
     } else {
       const w = parseJson_(sh.getRange(row, COL.work).getValue());
@@ -746,8 +747,9 @@ function removePushTokens_(tokens) {
 }
 
 /** 新しいTODOを、宛先の人の携帯に知らせる。だれから・種類・工事名を出す（TODOの文章は出さない） */
-function notifyNewTask_(names, kind, from, project) {
-  pushTo_(names, '新しい' + (kind || 'TODO'), from + 'さんから' + (project ? '（' + project + '）' : ''));
+function notifyNewTask_(names, kind, from, project, report) {
+  if (report) pushTo_(names, '作業連絡：' + report, from + 'さん' + (project ? '（' + project + '）' : ''));
+  else pushTo_(names, '新しい' + (kind || 'TODO'), from + 'さんから' + (project ? '（' + project + '）' : ''));
 }
 
 /** まだ自分がやることが残っているか（アイコンの数字に使う） */
@@ -755,7 +757,7 @@ function waitingFor_(t, name, level) {
   if (t.checkedBy) return false;
   const mine = t.to === 'all' ? level !== '社外' : t.to.indexOf(name) >= 0;
   if (!mine) return false;
-  return t.kind === WORK_KIND ? WORK_ENDED.indexOf(t.answers[name]) < 0 && t.answers[name] !== 'no' : !t.answers[name];
+  return !t.answers[name];
 }
 
 /**

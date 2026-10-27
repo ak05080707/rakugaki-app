@@ -55,6 +55,10 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .work.fin{background:var(--yes);border-color:var(--yes);color:#fff}
 .work.move{background:var(--q);border-color:var(--q);color:#fff}
 .memobox{display:flex;flex-direction:column;gap:6px}
+.reportbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.reportbtns .work{min-height:52px;font-size:16px}
+.reportbtns .work.move{grid-column:1 / -1}
+.ctime{font-variant-numeric:tabular-nums}
 .memoin{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;resize:vertical}
 .memo{background:var(--bg);border-radius:6px;padding:6px 10px;white-space:pre-wrap;color:var(--ink)}
 .worknote{font-size:13px;font-weight:700}
@@ -286,9 +290,13 @@ summary .badge{margin-left:8px}
               <button type="button" data-kind="作業連絡" aria-pressed="false">作業連絡</button>
             </div>
           </div>
-          <div class="field">
+          <div class="field" id="titleField">
             <label class="l" for="tTitle">段取り or チェック</label>
             <input type="text" id="tTitle" maxlength="200" placeholder="例：足場の点検（写真を提出）">
+          </div>
+          <div class="field" id="reportMemoField" hidden>
+            <label class="l" for="rMemo">作業内容（なくてもよい）</label>
+            <textarea id="rMemo" class="memoin" rows="2" maxlength="300" placeholder="例：タイル貼り、清掃片付けまで"></textarea>
           </div>
           <div class="field">
             <span class="l">宛先（グループか人を選ぶ）</span>
@@ -299,10 +307,15 @@ summary .badge{margin-left:8px}
               <div class="people" id="memberBtns"></div>
             </div>
           </div>
-          <div class="actions">
+          <div class="actions" id="normalBtns">
             <button class="primary" type="submit" id="addBtn">TODOを出す</button>
-            <span class="notice" id="formMsg"></span>
           </div>
+          <div class="reportbtns" id="reportBtns" hidden>
+            <button type="button" class="work go" data-report="作業開始">作業開始</button>
+            <button type="button" class="work fin" data-report="作業終了">作業終了</button>
+            <button type="button" class="work move" data-report="次の現場に向かいます">次の現場に向かいます</button>
+          </div>
+          <span class="notice" id="formMsg"></span>
         </div>
       </form>
 
@@ -620,7 +633,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-B';
+const UI_VERSION = '10/27-D';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -865,7 +878,7 @@ function short(names, max) {
 function statusOf(t) {
   if (isDone(t)) return ['p-yes', '完了 ✓'];
   const a = t.answers, R = recips(t);
-  if (t.kind === WORK_KIND && R) {
+  if (false && t.kind === WORK_KIND && R) {   // （以前の、宛先の人が作業を進める形。今は使わない）
     const vals = R.map(n => a[n]);
     if (vals.includes('no')) return ['p-no', '別途確認あり'];
     const fin = vals.filter(v => WORK_ENDED.includes(v)).length, go = vals.filter(v => v === 'start').length;
@@ -892,10 +905,31 @@ let formKind = '確認', kindFilter = '';
 const isMine = t => { const R = recips(t); return !R || R.includes(myName); };
 // 自分あてで、まだ自分が返事をしていないもの（＝今、来ているもの）
 const WORK_ENDED = ['done', 'move'];
-const needsMe = t => isMine(t) && !isDone(t) && (t.kind === WORK_KIND ? !WORK_ENDED.includes(t.answers[myName]) && t.answers[myName] !== 'no' : !t.answers[myName]);
+const needsMe = t => isMine(t) && !isDone(t) && !t.answers[myName];
 document.querySelectorAll('#kindSeg [data-kind]').forEach(b => b.addEventListener('click', () => {
   formKind = b.dataset.kind;
   document.querySelectorAll('#kindSeg [data-kind]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  setReportMode(formKind === WORK_KIND);
+}));
+// 作業連絡：段取りの欄の代わりに、作業内容の欄と「作業開始・作業終了・次の現場に向かいます」を出す
+function setReportMode(on) {
+  $('#titleField').hidden = on; $('#normalBtns').hidden = on;
+  $('#reportMemoField').hidden = !on; $('#reportBtns').hidden = !on;
+  $('#tDue').closest('.field').hidden = on;
+  // 宛先がまだ空なら、上司を入れておく
+  if (on && !sel.size && data && data.members) { bossNames().forEach(n => sel.add(n)); groupLabel = 'メンバー'; renderPicker(); }
+}
+document.querySelectorAll('#reportBtns [data-report]').forEach(b => b.addEventListener('click', () => {
+  const report = b.dataset.report;
+  const msg = $('#formMsg'); msg.textContent = '';
+  const to = [...sel];
+  if (!to.length) { msg.textContent = '連絡する相手（宛先）を選んでください。'; return; }
+  const memo = $('#rMemo').value.trim();
+  document.querySelectorAll('#reportBtns button').forEach(x => { x.disabled = true; });
+  call('addTask', myName, { title: report + (memo ? '：' + memo : ''), project: $('#tProj').value.trim(), due: '', to, group: groupLabel, kind: WORK_KIND, report })
+    .then(d => { $('#rMemo').value = ''; apply(d); toast('「' + report + '」を連絡しました（' + hm(Date.now()) + '）'); })
+    .catch(err => { msg.textContent = errMsg(err); })
+    .finally(() => { document.querySelectorAll('#reportBtns button').forEach(x => { x.disabled = false; }); });
 }));
 function renderKinds() {
   const waiting = data.tasks.filter(needsMe);
@@ -949,6 +983,7 @@ function card(t) {
     t.project ? el('span', { class: 'proj', text: t.project }) : null,
     el('span', { text: '宛先：' + toText }),
     el('span', { text: '出した人：' + t.from }),
+    t.created ? el('span', { class: 'ctime', text: hm(t.created) }) : null,
     t.due ? el('span', { text: '期限：' + t.due.replace(/-/g, '/') }) : null,
     el('span', { class: 'pill ' + cls, text: label }));
 
@@ -956,7 +991,7 @@ function card(t) {
   const yesN = pool.filter(n => a[n] === 'yes'), noN = pool.filter(n => a[n] === 'no');
   const waitN = R ? R.filter(n => !a[n]) : [];
   const ans = el('div', { class: 'answers' });
-  const isWork = t.kind === WORK_KIND;
+  const isWork = false;   // 作業連絡は「報告」として扱う。受けた人は確認済み／別途確認で返事
   const w = t.work || {};
   if (isWork) {
     // 作業連絡：だれが作業中・作業完了か（時刻つき）
