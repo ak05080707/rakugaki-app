@@ -53,6 +53,10 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .work{min-width:110px;font-weight:700}
 .work.go{background:var(--ask);border-color:var(--ask);color:#fff}
 .work.fin{background:var(--yes);border-color:var(--yes);color:#fff}
+.work.move{background:var(--q);border-color:var(--q);color:#fff}
+.memobox{display:flex;flex-direction:column;gap:6px}
+.memoin{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;resize:vertical}
+.memo{background:var(--bg);border-radius:6px;padding:6px 10px;white-space:pre-wrap;color:var(--ink)}
 .worknote{font-size:13px;font-weight:700}
 .badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--no);color:#fff;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .seg .badge{margin-left:6px;min-width:20px;height:20px;font-size:12px}
@@ -615,7 +619,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-A';
+const UI_VERSION = '10/27-B';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -863,9 +867,9 @@ function statusOf(t) {
   if (t.kind === WORK_KIND && R) {
     const vals = R.map(n => a[n]);
     if (vals.includes('no')) return ['p-no', '別途確認あり'];
-    const fin = vals.filter(v => v === 'done').length, go = vals.filter(v => v === 'start').length;
-    if (fin === R.length) return ['p-yes', R.length > 1 ? '全員作業完了・完了待ち' : '作業完了・完了待ち'];
-    if (R.length > 1) return [fin || go ? 'p-wait' : 'p-wait', `作業完了 ${fin}/${R.length}`];
+    const fin = vals.filter(v => WORK_ENDED.includes(v)).length, go = vals.filter(v => v === 'start').length;
+    if (fin === R.length) return ['p-yes', R.length > 1 ? '全員作業終了・完了待ち' : (vals[0] === 'move' ? '次の現場へ移動・完了待ち' : '作業終了・完了待ち')];
+    if (R.length > 1) return ['p-wait', `作業終了 ${fin}/${R.length}`];
     return ['p-wait', go ? '作業中' : 'まだ作業前'];
   }
   if (R) {
@@ -886,7 +890,8 @@ const hm = ms => { if (!ms) return ''; const d = new Date(ms); return (d.getMont
 let formKind = '確認', kindFilter = '';
 const isMine = t => { const R = recips(t); return !R || R.includes(myName); };
 // 自分あてで、まだ自分が返事をしていないもの（＝今、来ているもの）
-const needsMe = t => isMine(t) && !isDone(t) && (t.kind === WORK_KIND ? t.answers[myName] !== 'done' && t.answers[myName] !== 'no' : !t.answers[myName]);
+const WORK_ENDED = ['done', 'move'];
+const needsMe = t => isMine(t) && !isDone(t) && (t.kind === WORK_KIND ? !WORK_ENDED.includes(t.answers[myName]) && t.answers[myName] !== 'no' : !t.answers[myName]);
 document.querySelectorAll('#kindSeg [data-kind]').forEach(b => b.addEventListener('click', () => {
   formKind = b.dataset.kind;
   document.querySelectorAll('#kindSeg [data-kind]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
@@ -954,10 +959,14 @@ function card(t) {
   const w = t.work || {};
   if (isWork) {
     // 作業連絡：だれが作業中・作業完了か（時刻つき）
-    const goN = pool.filter(n => a[n] === 'start'), finN = pool.filter(n => a[n] === 'done');
-    const withTime = (list, key) => list.map(n => n + (w[n] && w[n][key] ? '（' + hm(w[n][key]) + '）' : '')).join('、');
-    if (finN.length) ans.append(el('div', {}, el('span', { class: 'y', text: `作業完了 ${finN.length}人：` }), withTime(finN, 'done')));
-    if (goN.length) ans.append(el('div', {}, el('span', { class: 'w', text: `作業中 ${goN.length}人：` }), withTime(goN, 'start')));
+    // 一人ずつ：作業開始・作業終了・次の現場への時刻と、作業内容
+    pool.filter(n => w[n] || ['start', 'done', 'move'].includes(a[n])).forEach(n => {
+      const x = w[n] || {};
+      const steps = [x.start ? '開始 ' + hm(x.start) : '', x.done ? '終了 ' + hm(x.done) : '', x.move ? '次の現場へ ' + hm(x.move) : ''].filter(Boolean).join(' → ');
+      const lab = a[n] === 'move' ? '次の現場へ' : (a[n] === 'done' ? '作業終了' : (a[n] === 'start' ? '作業中' : 'メモ'));
+      ans.append(el('div', {}, el('span', { class: a[n] === 'start' ? 'w' : 'y', text: n + '：' + lab + '　' }), steps));
+      if (x.memo) ans.append(el('div', { class: 'memo' }, el('span', { class: 'l', text: '作業内容（' + hm(x.memoAt) + '）' }), el('div', { text: x.memo })));
+    });
   }
   if (yesN.length) ans.append(el('div', {}, el('span', { class: 'y', text: `確認済み ${yesN.length}人：` }), short(yesN, 8)));
   if (noN.length) ans.append(el('div', {}, el('span', { class: 'n', text: `別途確認 ${noN.length}人：` }), short(noN, 8)));
@@ -965,6 +974,7 @@ function card(t) {
   if (done) ans.append(el('div', { text: '完了にした人：' + t.checkedBy }));
 
   const acts = el('div', { class: 'actions' });
+  let memoArea = null;
   if ((!R || R.includes(myName)) && !done) {
     const mine = a[myName];
     const answer = v => () => {
@@ -975,15 +985,27 @@ function card(t) {
     if (!isWork) {
       acts.append(
         el('button', { type: 'button', class: 'yes', 'aria-pressed': String(mine === 'yes'), text: '確認済み', on: { click: answer('yes') } }), noBtn);
-    } else if (mine === 'done') {
-      acts.append(el('span', { class: 'worknote', text: '作業完了（' + hm(w[myName] && w[myName].done) + '）' }),
-        el('button', { type: 'button', class: 'ghost', text: '作業完了を取り消す', on: { click: answer('undo') } }));
-    } else if (mine === 'start') {
-      acts.append(el('button', { type: 'button', class: 'work fin', text: '作業完了', on: { click: answer('done') } }),
-        el('span', { class: 'worknote', text: '作業中（' + hm(w[myName] && w[myName].start) + '〜）' }),
-        el('button', { type: 'button', class: 'ghost', text: '作業開始を取り消す', on: { click: answer('undo') } }));
     } else {
-      acts.append(el('button', { type: 'button', class: 'work go', text: '作業開始', on: { click: answer('start') } }), noBtn);
+      const x = w[myName] || {};
+      const undo = label => el('button', { type: 'button', class: 'ghost', text: label, on: { click: answer('undo') } });
+      if (mine === 'move') {
+        acts.append(el('span', { class: 'worknote', text: '次の現場に向かいます（' + hm(x.move) + '）' }), undo('取り消す'));
+      } else if (mine === 'done') {
+        acts.append(el('button', { type: 'button', class: 'work move', text: '次の現場に向かいます', on: { click: answer('move') } }),
+          el('span', { class: 'worknote', text: '作業終了（' + hm(x.done) + '）' }), undo('作業終了を取り消す'));
+      } else if (mine === 'start') {
+        acts.append(el('button', { type: 'button', class: 'work fin', text: '作業終了', on: { click: answer('done') } }),
+          el('span', { class: 'worknote', text: '作業中（' + hm(x.start) + '〜）' }), undo('作業開始を取り消す'));
+      } else {
+        acts.append(el('button', { type: 'button', class: 'work go', text: '作業開始', on: { click: answer('start') } }), noBtn);
+      }
+      // 作業内容のメモ（空欄に書いて保存）
+      const box = el('textarea', { class: 'memoin', rows: '2', maxlength: '1000', placeholder: '作業内容（例：足場の解体 半分まで。残りは明日）', 'aria-label': '作業内容' });
+      box.value = x.memo || '';
+      const saveMemo = () => call('saveWorkMemo', myName, t.id, box.value).then(d => { apply(d); toast(box.value.trim() ? '作業内容を保存しました' : '作業内容を消しました'); }).catch(e => toast(errMsg(e)));
+      memoArea = el('div', { class: 'memobox' }, box, el('div', { class: 'actions' },
+        el('button', { type: 'button', text: '作業内容を保存', on: { click: saveMemo } }),
+        x.memoAt ? el('span', { class: 'who', text: '保存：' + hm(x.memoAt) }) : null));
     }
   }
   acts.append(el('span', { class: 'spacer' }));
@@ -1000,7 +1022,7 @@ function card(t) {
       acts.append(el('button', { type: 'button', class: 'ghost', text: '削除', on: { click: () => { pending = 'one:' + t.id; render(); } } }));
     }
   }
-  return el('article', { class: 'card' + (done ? ' done' : '') }, meta, el('div', { class: 'title', text: t.title }), ans.childElementCount ? ans : null, acts);
+  return el('article', { class: 'card' + (done ? ' done' : '') }, meta, el('div', { class: 'title', text: t.title }), ans.childElementCount ? ans : null, memoArea, acts);
 }
 
 function del(ids) {
