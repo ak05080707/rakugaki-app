@@ -62,7 +62,6 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .phrase .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:15em}
 .phrase .x{border:0;background:transparent;color:var(--muted);padding:2px 6px;min-height:0;font-size:13px}
 .reportpick{font-size:17px;font-weight:700;min-height:48px;width:100%}
-.rclock{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0}
 .reportbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .reportbtns .work{min-height:52px;font-size:16px}
 .reportbtns .work.move{grid-column:1 / -1}
@@ -303,7 +302,7 @@ summary .badge{margin-left:8px}
             <input type="text" id="tTitle" maxlength="200" placeholder="例：足場の点検（写真を提出）">
           </div>
           <div class="field" id="reportMemoField" hidden>
-            <label class="l" for="reportPick">作業内容　<span class="rclock" id="rClock"></span></label>
+            <label class="l" for="reportPick">作業内容</label>
             <select id="reportPick" class="reportpick"></select>
             <div class="phrases" id="phraseBox" hidden>
               <span class="l">覚えた文章（5個まで・× で消せます）</span>
@@ -641,7 +640,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-G';
+const UI_VERSION = '10/27-H';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -921,13 +920,6 @@ document.querySelectorAll('#kindSeg [data-kind]').forEach(b => b.addEventListene
 }));
 // 作業連絡：段取りの欄の代わりに、作業内容の欄と「作業開始・作業終了・次の現場に向かいます」を出す
 let reportSel = '作業開始';
-// 作業内容の欄に、今の日にちと時間を出す（連絡したときの時刻が残る）
-const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
-function tickClock() {
-  const d = new Date();
-  $('#rClock').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2);
-}
-tickClock(); setInterval(tickClock, 15000);
 function setReportMode(on) {
   $('#titleField').hidden = on;
   $('#reportMemoField').hidden = !on;
@@ -985,7 +977,7 @@ function sendReport() {
   const title = reportSel ? reportSel + (memo ? '：' + memo : '') : memo;
   $('#addBtn').disabled = true; $('#addBtn').textContent = '送信中…';
   call('addTask', myName, { title, project: $('#tProj').value.trim(), due: '', to, group: groupLabel, kind: WORK_KIND, report: reportSel })
-    .then(d => { if (!reportSel) rememberPhrase(memo); $('#rMemo').value = ''; apply(d); $('#reportPick').value = '作業開始'; renderPhrases(); toast('「' + (reportSel || '作業連絡') + '」を連絡しました（' + hm(Date.now()) + '）'); })
+    .then(d => { if (!reportSel) rememberPhrase(memo); $('#rMemo').value = ''; apply(d); $('#reportPick').value = '作業開始'; renderPhrases(); toast('「' + (reportSel || '作業連絡') + '」を連絡しました'); })
     .catch(err => { msg.textContent = errMsg(err); })
     .finally(() => { $('#addBtn').disabled = false; $('#addBtn').textContent = '連絡する'; });
 }
