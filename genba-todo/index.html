@@ -291,10 +291,10 @@ summary .badge{margin-left:8px}
           <div class="field">
             <span class="l">種類</span>
             <div class="seg" role="group" aria-label="種類" id="kindSeg">
+              <button type="button" data-kind="作業連絡" aria-pressed="false">作業連絡</button>
               <button type="button" data-kind="確認" aria-pressed="true">確認</button>
               <button type="button" data-kind="お願い" aria-pressed="false">お願い</button>
               <button type="button" data-kind="質問" aria-pressed="false">質問</button>
-              <button type="button" data-kind="作業連絡" aria-pressed="false">作業連絡</button>
             </div>
           </div>
           <div class="field" id="titleField">
@@ -650,7 +650,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-I';
+const UI_VERSION = '10/27-J';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -934,7 +934,8 @@ function statusOf(t) {
   return vals.length ? ['p-wait', `確認済み ${vals.length}人・完了待ち`] : ['p-wait', '返事待ち'];
 }
 // 種類（確認・お願い・質問）
-const KINDS = ['確認', 'お願い', '質問', '作業連絡'];
+const KINDS = ['確認', 'お願い', '質問', '作業連絡'];   // 札の色（k1〜k4）はこの順
+const KIND_ORDER = ['作業連絡', '確認', 'お願い', '質問'];   // 画面に並べる順
 const WORK_KIND = '作業連絡';
 const hm = ms => { if (!ms) return ''; const d = new Date(ms); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2); };
 let formKind = '確認', kindFilter = '';
@@ -1020,7 +1021,7 @@ function renderKinds() {
     'aria-label': n ? `${label}（まだ返事をしていないもの ${n}件）` : label,
     on: { click: () => { kindFilter = value; pending = null; render(); } }
   }, label, n ? el('span', { class: 'badge', text: String(n) }) : null);
-  $('#kindRow').replaceChildren(btn('全部', '', 0), ...KINDS.map(k => btn(k, k, waiting.filter(t => t.kind === k).length)));
+  $('#kindRow').replaceChildren(btn('全部', '', 0), ...KIND_ORDER.map(k => btn(k, k, waiting.filter(t => t.kind === k).length)));
 }
 function visible() {
   return data.tasks.filter(t => {
