@@ -57,6 +57,10 @@ header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-betw
 .memobox{display:flex;flex-direction:column;gap:6px}
 .reportseg{display:grid !important;grid-template-columns:1fr 1fr;width:100%}
 .reportseg button{min-height:46px;font-size:15px;border:1px solid var(--line) !important}
+.phrases{display:flex;flex-direction:column;gap:6px}
+.phrase{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 4px 2px 8px;font-size:14px;max-width:100%;border:1px solid var(--line);background:var(--surface)}
+.phrase .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:15em}
+.phrase .x{border:0;background:transparent;color:var(--muted);padding:2px 6px;min-height:0;font-size:13px}
 .rclock{font-size:15px;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:0}
 .reportbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .reportbtns .work{min-height:52px;font-size:16px}
@@ -304,6 +308,10 @@ summary .badge{margin-left:8px}
               <button type="button" data-report="作業終了" aria-pressed="false">作業終了</button>
               <button type="button" data-report="次の現場に向かいます" aria-pressed="false">次の現場に向かいます</button>
               <button type="button" data-report="" aria-pressed="false">その他</button>
+            </div>
+            <div class="phrases" id="phraseBox" hidden>
+              <span class="l">覚えた文章（押すと空欄に入ります・5個まで）</span>
+              <div class="people" id="phraseList"></div>
             </div>
             <textarea id="rMemo" class="memoin" rows="2" maxlength="300" placeholder="空欄：自由に書けます（例：タイル貼り、清掃片付けまで）" aria-label="作業内容（自由に書く）"></textarea>
           </div>
@@ -637,7 +645,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-E';
+const UI_VERSION = '10/27-F';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -935,8 +943,27 @@ function setReportMode(on) {
 document.querySelectorAll('#reportSeg [data-report]').forEach(b => b.addEventListener('click', () => {
   reportSel = b.dataset.report;
   document.querySelectorAll('#reportSeg [data-report]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderPhrases();
   if (!reportSel) $('#rMemo').focus();
 }));
+// 「その他」で使う文章を5個まで覚える（この携帯・パソコンに残る）。連絡したら自動で覚える
+const PHRASE_KEY = 'genba-phrases';
+function loadPhrases() { try { return JSON.parse(localStorage.getItem(PHRASE_KEY) || '[]').slice(0, 5); } catch (e) { return []; } }
+function savePhrases(list) { try { localStorage.setItem(PHRASE_KEY, JSON.stringify(list.slice(0, 5))); } catch (e) {} }
+function rememberPhrase(text) {
+  text = String(text || '').trim();
+  if (!text) return;
+  savePhrases([text].concat(loadPhrases().filter(x => x !== text)));
+}
+function renderPhrases() {
+  const list = loadPhrases();
+  $('#phraseBox').hidden = reportSel !== '' || !list.length;
+  $('#phraseList').replaceChildren(...list.map(text => el('span', { class: 'phrase person' },
+    el('button', { type: 'button', class: 'x', style: 'color:var(--ink);font-size:14px;padding:2px 4px', title: text,
+      on: { click: () => { $('#rMemo').value = text; $('#rMemo').focus(); } } }, el('span', { class: 't', text })),
+    el('button', { type: 'button', class: 'x', 'aria-label': '「' + text + '」を消す', text: '×',
+      on: { click: () => { savePhrases(loadPhrases().filter(x => x !== text)); renderPhrases(); } } }))));
+}
 // 作業連絡を送る（「連絡する」を押したとき）
 function sendReport() {
   const msg = $('#formMsg'); msg.textContent = '';
@@ -947,7 +974,7 @@ function sendReport() {
   const title = reportSel ? reportSel + (memo ? '：' + memo : '') : memo;
   $('#addBtn').disabled = true; $('#addBtn').textContent = '送信中…';
   call('addTask', myName, { title, project: $('#tProj').value.trim(), due: '', to, group: groupLabel, kind: WORK_KIND, report: reportSel })
-    .then(d => { $('#rMemo').value = ''; apply(d); toast('「' + (reportSel || '作業連絡') + '」を連絡しました（' + hm(Date.now()) + '）'); })
+    .then(d => { if (!reportSel) rememberPhrase(memo); $('#rMemo').value = ''; apply(d); renderPhrases(); toast('「' + (reportSel || '作業連絡') + '」を連絡しました（' + hm(Date.now()) + '）'); })
     .catch(err => { msg.textContent = errMsg(err); })
     .finally(() => { $('#addBtn').disabled = false; $('#addBtn').textContent = '連絡する'; });
 }
