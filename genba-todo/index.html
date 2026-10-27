@@ -357,6 +357,16 @@ summary .badge{margin-left:8px}
         </div>
       </details>
 
+      <details class="panel" id="showPanel">
+        <summary>宛先に出す人<span class="who" id="showState"></span></summary>
+        <span class="l">黒い人が、宛先の「人を選ぶ」に出ます。押すと出す・出さないが変わります。</span>
+        <div class="people" id="showList"></div>
+        <div class="actions">
+          <button type="button" class="ghost" id="showAll">全員出す</button>
+          <span class="who">この設定は、この携帯・パソコンだけに保存されます。グループで選んだときは、出していない人も宛先に入ります。</span>
+        </div>
+      </details>
+
       <details class="panel" id="pushPanel" hidden>
         <summary>通知（アプリを閉じていても届く）<span class="who" id="pushState"></span></summary>
         <span id="pushText"></span>
@@ -640,7 +650,7 @@ function notifyNew(d) {
   knownIds = ids;
 }
 
-const UI_VERSION = '10/27-H';
+const UI_VERSION = '10/27-I';
 function apply(d) {
   $('#ver').textContent = `版：画面 ${UI_VERSION} ／ プログラム ${d.ver || '古い版（Code.gs が前のまま）'}`;
   if (d.needPin) { showPinPanel(d); return; }
@@ -853,7 +863,8 @@ let presetDone = false;
 const bossNames = () => data.members.filter(m => m.role === '上司' && m.name !== myName).map(m => m.name);
 // メンバー１（内部では「部下」）が開いたときは、宛先に最初からメンバー（内部では「上司」）全員を入れておく
 function presetBosses() {
-  sel.clear(); bossNames().forEach(n => sel.add(n)); groupLabel = 'メンバー';
+  const hidden = loadHideTo();
+  sel.clear(); bossNames().filter(n => !hidden.includes(n)).forEach(n => sel.add(n)); groupLabel = 'メンバー';
 }
 function renderPicker() {
   const allGroups = [{ name: 'メンバー', members: bossNames() }].concat(data.groups).filter(g => g.members.length);
@@ -861,11 +872,29 @@ function renderPicker() {
     type: 'button', class: 'grp',
     on: { click: () => { const empty = sel.size === 0; g.members.forEach(n => sel.add(n)); groupLabel = empty ? g.name : ''; renderPicker(); } }
   }, `＋ ${g.name}（${g.members.length}人）`)));
-  $('#memberBtns').replaceChildren(...data.members.map(m => el('button', {
+  // 設定で出さないことにした人は出さない（選ばれているときは、外せるように出す）
+  const hidden = loadHideTo();
+  $('#memberBtns').replaceChildren(...data.members.filter(m => !hidden.includes(m.name) || sel.has(m.name)).map(m => el('button', {
     type: 'button', class: 'person', 'aria-pressed': String(sel.has(m.name)),
     on: { click: () => { sel.has(m.name) ? sel.delete(m.name) : sel.add(m.name); groupLabel = ''; renderPicker(); } }
   }, m.name)));
+  renderShowList();
 }
+// 設定「宛先に出す人」：出さない人の名前を、この携帯・パソコンに覚える
+const HIDE_TO_KEY = 'genba-hide-to';
+function loadHideTo() { try { return JSON.parse(localStorage.getItem(HIDE_TO_KEY) || '[]'); } catch (e) { return []; } }
+function saveHideTo(list) { try { localStorage.setItem(HIDE_TO_KEY, JSON.stringify(list)); } catch (e) {} }
+function renderShowList() {
+  const hidden = loadHideTo();
+  const names = data.members.map(m => m.name);
+  const off = names.filter(n => hidden.includes(n)).length;
+  $('#showState').textContent = off ? `（${names.length - off}人を出す・${off}人を出さない）` : '（全員出す）';
+  $('#showList').replaceChildren(...names.map(n => el('button', {
+    type: 'button', class: 'person', 'aria-pressed': String(!hidden.includes(n)),
+    on: { click: () => { const h = loadHideTo(); saveHideTo(h.includes(n) ? h.filter(x => x !== n) : h.concat(n)); renderPicker(); } }
+  }, n)));
+}
+$('#showAll').addEventListener('click', () => { saveHideTo([]); renderPicker(); });
 
 function setFormOpen(open) {
   $('#formBody').hidden = !open;
@@ -926,7 +955,7 @@ function setReportMode(on) {
   if (!$('#addBtn').disabled) $('#addBtn').textContent = on ? '連絡する' : (data && data.me && data.me.role === '上司' ? 'TODOを出す' : '依頼を出す');
   $('#tDue').closest('.field').hidden = on;
   // 宛先がまだ空なら、上司を入れておく
-  if (on && !sel.size && data && data.members) { bossNames().forEach(n => sel.add(n)); groupLabel = 'メンバー'; renderPicker(); }
+  if (on && !sel.size && data && data.members) { presetBosses(); renderPicker(); }
 }
 $('#reportPick').addEventListener('change', e => {
   const v = e.target.value;
