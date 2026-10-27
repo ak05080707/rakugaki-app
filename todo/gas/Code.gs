@@ -10,6 +10,7 @@
  *   API_KEY                    … 合言葉（必須）
  *   LINE_CHANNEL_ACCESS_TOKEN  … LINE Messaging API のチャネルアクセストークン（任意）
  *   LINE_OWNER_USER_ID         … 自分の LINE userId（初回メッセージで自動登録）
+ *   TIMETREE_EMAIL / TIMETREE_PASSWORD / TIMETREE_CALENDAR … LINE の「予定 …」を TimeTree に入れる（任意・TimeTree.gs）
  */
 
 const SHEET_TODO = 'TODO';
@@ -255,6 +256,8 @@ function handleLineEvent_(ev) {
   let reply;
   if (/^(一覧|リスト|今日|todo)$/i.test(text)) {
     reply = summaryText_();
+  } else if (isScheduleText_(text)) {   // 「予定 …」は TimeTree へ（TimeTree.gs）
+    reply = handleScheduleText_(text);
   } else {
     const m = text.match(/^(完了|済|done)\s*(\d+)$/i);
     if (m) {

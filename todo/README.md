@@ -20,7 +20,7 @@
 
 | フォルダ | 中身 |
 |---|---|
-| `gas/` | Apps Script に貼るファイル（Code.gs / Index.html / appsscript.json） |
+| `gas/` | Apps Script に貼るファイル（Code.gs / TimeTree.gs / Index.html / appsscript.json） |
 | `mcp-server/` | Claude Desktop 用の自作MCPコネクター（Node.js） |
 
 ---
@@ -70,6 +70,7 @@
 | `!山口さんに電話` / `至急 …` | 🔥至急で追加 |
 | `一覧` | 未完了の一覧が返ってくる |
 | `完了 2` | 一覧の2番を完了に |
+| `予定 10/30 14:00 A邸 打合せ` | TimeTree に予定を入れる（下の「LINE → TimeTree」の設定が必要） |
 
 毎朝7時に「おはようございます☀️」と今日のTODOが届きます（無料枠は月200通なので1日1通なら余裕）。
 
@@ -144,6 +145,21 @@ TimeTree 側の仕様変更で動かなくなる可能性があります。
 - **TODOツールがエラー** … `TODO_API_URL` が `/exec` で終わっているか、合言葉が正しいかを確認
 
 ---
+
+## LINE → TimeTree（予定を入れる・任意）
+LINE で `予定 …` と送ると、Apps Script（`gas/TimeTree.gs`）が TimeTree に予定を入れます。読み取りと同じく非公式の仕組みなので、TimeTree 側の仕様変更で止まることがあります。
+入れられなかった時は LINE に「⚠️」で知らせ、代わりに TODO に入れます。
+
+| 送り方 | 入る予定 |
+|---|---|
+| `予定 10/30 14:00 A邸 打合せ` | 10/30 14:00〜15:00（終わりを書かなければ1時間） |
+| `予定 明日 9時半-11時 B現場 立会い` | 明日 9:30〜11:00（`今日` `明後日` `10月31日(土)` `午後2時` もOK） |
+| `予定 11/3 社内清掃` | 11/3 終日 |
+
+1. Apps Script に `TimeTree.gs` を追加（＋ → スクリプト → 名前 `TimeTree`）、`Code.gs` も最新に貼り替え
+2. スクリプト プロパティに `TIMETREE_EMAIL` / `TIMETREE_PASSWORD` / `TIMETREE_CALENDAR`（入れるカレンダー名の一部）を追加
+3. 関数 `testTimeTree` を ▷実行 → 「準備OKです」と出ればOK（テスト予定を作ってすぐ消します）
+4. デプロイを管理 → 鉛筆 → 新バージョン
 
 ## Plaud 連携の確認結果（2026/9/28）
 - Claude の Plaud コネクターは **接続OK**（アカウント akira1 で録音一覧・要約が読める状態）
