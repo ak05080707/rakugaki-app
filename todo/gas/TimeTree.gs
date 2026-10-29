@@ -162,7 +162,8 @@ function ttSession_(fresh) {
     if (hit) return JSON.parse(hit);
   }
   const props = PropertiesService.getScriptProperties();
-  const email = props.getProperty('TIMETREE_EMAIL'), pw = props.getProperty('TIMETREE_PASSWORD');
+  // 貼り付けた時に前後に入りがちな空白・改行は取り除く
+  const email = (props.getProperty('TIMETREE_EMAIL') || '').trim(), pw = (props.getProperty('TIMETREE_PASSWORD') || '').trim();
   if (!email || !pw) throw new Error('TimeTree のメールアドレス・パスワードが未設定です');
   const res = UrlFetchApp.fetch(TT_API + '/auth/email/signin', {
     method: 'put', contentType: 'application/json', headers: { 'X-Timetreea': TT_UA },
