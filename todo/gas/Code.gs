@@ -276,9 +276,9 @@ function handleLineEvent_(ev) {
 
 /** 「明日 見積 A社」「10/3 現場確認」「!至急 電話」などを解釈 */
 function parseLineText_(text) {
-  let due = '', priority = '中', t = text;
+  let due = '', priority = '中', t = toHalfWidth_(text);
   const today = new Date();
-  const dm = t.match(/^(今日|明日|明後日|あさって|(\d{1,2})[\/月](\d{1,2})日?)\s*/);
+  const dm = t.match(/^(今日|明日|明後日|あさって|(\d{1,2})[\/月](\d{1,2})日?)(?:\s*[(（][^)）]*[)）])?\s*/);
   if (dm) {
     const d = new Date(today);
     if (dm[1] === '明日') d.setDate(d.getDate() + 1);
@@ -366,6 +366,11 @@ function json_(o) {
 function nowStr_() { return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function fmtTime_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd HH:mm:ss') : String(v || ''); }
 function fmtDate_(v) { return v instanceof Date ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd') : String(v || ''); }
+
+/** 全角の数字・記号（１０／３０、１０月３０日、１４：００）を半角に。全角スペースも半角に */
+function toHalfWidth_(s) {
+  return String(s).replace(/[０-９：／！]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ').trim();
+}
 
 function normDue_(v) {
   if (!v) return '';

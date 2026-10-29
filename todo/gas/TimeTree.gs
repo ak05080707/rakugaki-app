@@ -47,8 +47,7 @@ const SCHEDULE_HELP = '予定の送り方：\n予定 10/30 14:00 A邸 打合せ\
  * @return {{date:string, start:string, end:string, allDay:boolean, title:string} | {error:string}}
  */
 function parseScheduleText_(text) {
-  let t = String(text).replace(/^(予定|📅)[\s　:：]*/, '').replace(/[０-９：／]/g, c =>
-    String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/　/g, ' ').trim();
+  let t = toHalfWidth_(String(text).replace(/^(予定|📅)[\s　:：]*/, ''));
 
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   const [ty, tm, td] = today.split('-').map(Number);
